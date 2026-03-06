@@ -40,7 +40,6 @@ services:
   - type: web
     name: tanner-greenhouse-frontend
     runtime: static
-    plan: free
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
