@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: tanner-greenhouse-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run db:generate
+    startCommand: npm run start:server
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_TTL
+        value: 30d
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: EVENT_REMINDER_ENABLED
+        value: "false"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: EVENT_REMINDER_LOOKAHEAD_HOURS
+        value: "24"
+      - key: EVENT_REMINDER_CHECK_INTERVAL_MINUTES
+        value: "15"
+      - key: EVENT_REMINDER_TIMEZONE
+        value: Africa/Lagos
+
+  - type: web
+    name: tanner-greenhouse-frontend
+    runtime: static
+    plan: free
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

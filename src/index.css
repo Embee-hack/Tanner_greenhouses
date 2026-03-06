@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 20% 97%;
+    --foreground: 150 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 25% 10%;
+
+    --primary: 152 60% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 15% 92%;
+    --secondary-foreground: 150 25% 20%;
+
+    --muted: 150 10% 94%;
+    --muted-foreground: 150 10% 45%;
+
+    --accent: 38 95% 52%;
+    --accent-foreground: 38 80% 15%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 12% 88%;
+    --input: 150 12% 88%;
+    --ring: 152 60% 32%;
+
+    --radius: 0.75rem;
+
+    --success: 142 70% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 95% 52%;
+    --warning-foreground: 38 80% 15%;
+
+    --danger: 0 72% 51%;
+    --danger-foreground: 0 0% 100%;
+
+    --chart-1: 152 60% 32%;
+    --chart-2: 38 95% 52%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 0 72% 51%;
+  }
+
+  .dark {
+    --background: 150 20% 7%;
+    --foreground: 150 10% 95%;
+
+    --card: 150 18% 11%;
+    --card-foreground: 150 10% 95%;
+
+    --popover: 150 18% 11%;
+    --popover-foreground: 150 10% 95%;
+
+    --primary: 152 55% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 15% 18%;
+    --secondary-foreground: 150 10% 85%;
+
+    --muted: 150 10% 16%;
+    --muted-foreground: 150 10% 55%;
+
+    --accent: 38 90% 52%;
+    --accent-foreground: 38 80% 10%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 12% 20%;
+    --input: 150 12% 20%;
+    --ring: 152 55% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-success { color: hsl(var(--success)); }
+  .bg-success { background-color: hsl(var(--success)); }
+  .text-warning { color: hsl(var(--warning)); }
+  .bg-warning { background-color: hsl(var(--warning)); }
+  .text-danger { color: hsl(var(--danger)); }
+  .bg-danger { background-color: hsl(var(--danger)); }
+  .border-success { border-color: hsl(var(--success)); }
+  .border-warning { border-color: hsl(var(--warning)); }
+  .border-danger { border-color: hsl(var(--danger)); }
+}
