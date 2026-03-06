@@ -36,6 +36,28 @@ const AuthenticatedApp = () => {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
       return <LoginScreen onSuccess={checkAppState} />;
+    } else if (authError.type === 'unknown') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background px-4">
+          <div className="w-full max-w-lg border border-border rounded-xl bg-card p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Unable to load app</h2>
+            <p className="text-sm text-muted-foreground">
+              {authError.message || "The frontend cannot reach the API right now."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Check Render environment variables (`VITE_API_BASE_URL`, `CLIENT_ORIGIN`, `PUBLIC_BASE_URL`) and redeploy.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={checkAppState}
+                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      );
     }
   }
 
