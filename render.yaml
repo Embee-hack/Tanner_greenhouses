@@ -2,7 +2,6 @@ services:
   - type: web
     name: tanner-greenhouse-api
     runtime: node
-    plan: free
     buildCommand: npm ci && npm run db:generate
     startCommand: npm run start:server
     envVars:
