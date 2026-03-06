@@ -6,7 +6,7 @@ services:
     startCommand: npm run start:server
     envVars:
       - key: DATABASE_URL
-        sync: true
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_TTL
@@ -14,7 +14,7 @@ services:
       - key: CLIENT_ORIGIN
         sync: false
       - key: PUBLIC_BASE_URL
-        sync: true
+        sync: false
       - key: EVENT_REMINDER_ENABLED
         value: "false"
       - key: SMTP_HOST
@@ -43,9 +43,9 @@ services:
     staticPublishPath: dist
     envVars:
       - key: SKIP_INSTALL_DEPS
-        value: "false"
+        value: "true"
       - key: VITE_API_BASE_URL
-        sync: true
+        sync: false
     routes:
       - type: rewrite
         source: /*
