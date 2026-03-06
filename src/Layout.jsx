@@ -20,12 +20,14 @@ import {
   ChevronDown,
   Users,
   HardHat,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CurrencyProvider, useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { base44 } from "@/api/base44Client";
 import NotificationPanel from "@/components/shared/NotificationPanel.jsx";
 import { initNotificationStore } from "@/components/shared/NotificationStore.jsx";
+import { useAuth } from "@/lib/AuthContext";
 
 const dashboardItem = { label: "Dashboard", icon: LayoutDashboard, page: "Dashboard" };
 
@@ -34,7 +36,7 @@ const groupedNav = [
     key: "operations",
     label: "Operations",
     icon: Sprout,
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { label: "Greenhouses", icon: Sprout, page: "Greenhouses" },
       { label: "Crop Cycles", icon: Leaf, page: "CropCycles" },
@@ -46,7 +48,7 @@ const groupedNav = [
     key: "plant_health",
     label: "Plant Health",
     icon: Bug,
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { label: "Pest & Disease", icon: Bug, page: "Incidents" },
       { label: "Treatments", icon: FlaskConical, page: "Treatments" },
@@ -152,6 +154,7 @@ function CurrencySelector() {
 
 function LayoutInner({ children, currentPageName }) {
   const DashboardIcon = dashboardItem.icon;
+  const { logout, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(true);
   const [showCompare, setShowCompare] = useState(false);
@@ -274,10 +277,10 @@ function LayoutInner({ children, currentPageName }) {
             to={createPageUrl(dashboardItem.page)}
             onClick={() => setSidebarOpen(false)}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group",
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 group",
               currentPageName === dashboardItem.page
                 ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                : "text-foreground/70 hover:text-foreground hover:bg-muted"
             )}
           >
             <DashboardIcon className="w-4 h-4 flex-shrink-0" />
@@ -294,10 +297,10 @@ function LayoutInner({ children, currentPageName }) {
                 <button
                   onClick={() => toggleSection(section.key)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-150",
                     isSectionActive
                       ? "text-foreground bg-muted/80"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      : "text-foreground/70 hover:text-foreground hover:bg-muted/60"
                   )}
                 >
                   <section.icon className="w-4 h-4 flex-shrink-0" />
@@ -359,6 +362,19 @@ function LayoutInner({ children, currentPageName }) {
             {isOwner && <NotificationPanel />}
             <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
             <span className="text-xs text-muted-foreground hidden sm:block">Live</span>
+            {user && (
+              <span className="text-xs text-muted-foreground hidden sm:block truncate max-w-[120px]">
+                {user.full_name || user.email}
+              </span>
+            )}
+            <button
+              onClick={() => logout(false)}
+              title="Sign out"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-2.5 py-1.5 bg-muted/50 hover:bg-muted transition-all"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:block">Sign out</span>
+            </button>
           </div>
         </header>
 

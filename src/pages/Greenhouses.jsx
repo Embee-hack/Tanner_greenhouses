@@ -8,7 +8,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sprout, Pencil, Maximize2, Layers } from "lucide-react";
+import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
@@ -40,7 +40,7 @@ function GreenhouseCard({ gh, onEdit }) {
         <div className="flex items-start justify-between mb-3">
           <div>
             <span className="text-2xl font-black text-foreground">{gh.code}</span>
-            <h3 className="font-medium text-foreground text-xs mt-1 text-muted-foreground">{gh.name || "No name"}</h3>
+            {gh.name && <h3 className="font-medium text-foreground text-xs mt-1 text-muted-foreground">{gh.name}</h3>}
           </div>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.bg} ${sc.text} ${sc.border}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
@@ -79,6 +79,21 @@ function GreenhouseCard({ gh, onEdit }) {
             <Pencil className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, sub, color }) {
+  return (
+    <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+        <Icon className="w-4 h-4 text-white" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xl font-black text-foreground leading-tight">{value}</p>
+        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
       </div>
     </div>
   );
@@ -166,11 +181,16 @@ export default function Greenhouses() {
     return block.name || "Unnamed Block";
   };
 
+  const activeCount = greenhouses.filter(g => g.status === "active").length;
+  const maintenanceCount = greenhouses.filter(g => g.status === "maintenance").length;
+  const totalArea = greenhouses.reduce((sum, g) => sum + (g.area || 0), 0);
+  const totalCapacity = greenhouses.reduce((sum, g) => sum + (g.capacity_plants || 0), 0);
+
   return (
     <div className="p-4 md:p-6">
       <PageHeader
         title="Greenhouses"
-        subtitle={`${greenhouses.length} total · ${greenhouses.filter(g => g.status === "active").length} active`}
+        subtitle={`${greenhouses.length} total · ${activeCount} active`}
         actions={
           <>
             <Button size="sm" variant="outline" onClick={() => setShowBlockModal(true)} className="gap-1.5">
@@ -182,6 +202,15 @@ export default function Greenhouses() {
           </>
         }
       />
+
+      {!loading && greenhouses.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <StatCard icon={LayoutGrid} label="Total Greenhouses" value={greenhouses.length} sub={`${blocks.length} block${blocks.length !== 1 ? "s" : ""}`} color="bg-primary" />
+          <StatCard icon={CheckCircle2} label="Active" value={activeCount} sub={maintenanceCount > 0 ? `${maintenanceCount} in maintenance` : "all operational"} color="bg-emerald-500" />
+          <StatCard icon={Maximize2} label="Total Area" value={totalArea ? `${totalArea.toLocaleString()} m²` : "—"} sub={totalArea ? `avg ${Math.round(totalArea / greenhouses.length).toLocaleString()} m² each` : "not recorded"} color="bg-blue-500" />
+          <StatCard icon={Layers} label="Total Capacity" value={totalCapacity ? totalCapacity.toLocaleString() : "—"} sub={totalCapacity ? "plants across all units" : "not recorded"} color="bg-violet-500" />
+        </div>
+      )}
 
       {!loading && greenhouses.length === 0 ? (
         <EmptyState icon={Sprout} title="No greenhouses yet" description="Add your first greenhouse to get started." action={<Button onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Add Greenhouse</Button>} />

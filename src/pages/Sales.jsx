@@ -580,76 +580,6 @@ export default function Sales() {
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-2xl p-4 md:p-5 space-y-4">
-        <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
-          <FormField label="Month">
-            <Input
-              type="month"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Product">
-            <Select value={productFilter} onValueChange={setProductFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All products" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All products</SelectItem>
-                {productOptions.map((label) => (
-                  <SelectItem key={label} value={label}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-          <FormField label="Sort by">
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="month_desc">Month: latest first</SelectItem>
-                <SelectItem value="month_asc">Month: oldest first</SelectItem>
-                <SelectItem value="product_az">Product: A to Z</SelectItem>
-                <SelectItem value="product_za">Product: Z to A</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormField>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setMonthFilter("");
-              setProductFilter("__all__");
-              setSortBy("month_desc");
-            }}
-            disabled={!filtersActive && sortBy === "month_desc"}
-          >
-            Reset
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Records</div>
-            <div className="text-lg font-semibold">{sortedRecords.length}</div>
-          </div>
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Total Sold</div>
-            <div className="text-lg font-semibold">{filteredKg.toFixed(1)} kg</div>
-          </div>
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Revenue</div>
-            <div className="text-lg font-semibold">{fmt(filteredRevenue, 2)}</div>
-          </div>
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Avg Price</div>
-            <div className="text-lg font-semibold">{fmt(filteredAvgPrice, 2)}/kg</div>
-          </div>
-        </div>
-      </div>
-
       {monthlyItemChart.length > 0 && itemSeries.length > 0 && (
         <div className="bg-card rounded-2xl border border-border p-5 md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -738,6 +668,76 @@ export default function Sales() {
           )}
         </div>
       )}
+
+      <div className="bg-card border border-border rounded-2xl p-4 md:p-5 space-y-4">
+        <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+          <FormField label="Month">
+            <Input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Product">
+            <Select value={productFilter} onValueChange={setProductFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="All products" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All products</SelectItem>
+                {productOptions.map((label) => (
+                  <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="Sort by">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="month_desc">Month: latest first</SelectItem>
+                <SelectItem value="month_asc">Month: oldest first</SelectItem>
+                <SelectItem value="product_az">Product: A to Z</SelectItem>
+                <SelectItem value="product_za">Product: Z to A</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setMonthFilter("");
+              setProductFilter("__all__");
+              setSortBy("month_desc");
+            }}
+            disabled={!filtersActive && sortBy === "month_desc"}
+          >
+            Reset
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+            <div className="text-xs text-muted-foreground">Records</div>
+            <div className="text-lg font-semibold">{sortedRecords.length}</div>
+          </div>
+          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+            <div className="text-xs text-muted-foreground">Total Sold</div>
+            <div className="text-lg font-semibold">{filteredKg.toFixed(1)} kg</div>
+          </div>
+          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+            <div className="text-xs text-muted-foreground">Revenue</div>
+            <div className="text-lg font-semibold">{fmt(filteredRevenue, 2)}</div>
+          </div>
+          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+            <div className="text-xs text-muted-foreground">Avg Price</div>
+            <div className="text-lg font-semibold">{fmt(filteredAvgPrice, 2)}/kg</div>
+          </div>
+        </div>
+      </div>
 
       {!loading && records.length === 0 ? (
         <EmptyState
