@@ -229,13 +229,22 @@ export default function Workers() {
       setPhotoError("Please choose a valid image file.");
       return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError("Image must be under 2MB.");
+      return;
+    }
 
     try {
       setUploadingPhoto(true);
-      const { file_url: fileUrl } = await base44.integrations.Core.UploadFile({ file });
-      setForm((prev) => ({ ...prev, profile_picture: fileUrl }));
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => resolve(evt.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      setForm((prev) => ({ ...prev, profile_picture: dataUrl }));
     } catch (_error) {
-      setPhotoError("Photo upload failed. Please try again.");
+      setPhotoError("Photo processing failed. Please try again.");
     } finally {
       setUploadingPhoto(false);
       if (e.target) e.target.value = "";

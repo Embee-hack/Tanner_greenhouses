@@ -108,10 +108,20 @@ export default function Inventory() {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return;
     setUploadingImg(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    setForm(f => ({ ...f, image_url: file_url }));
-    setUploadingImg(false);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => resolve(evt.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      setForm(f => ({ ...f, image_url: dataUrl }));
+    } finally {
+      setUploadingImg(false);
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleSave = async () => {

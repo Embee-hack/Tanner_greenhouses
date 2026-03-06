@@ -78,11 +78,14 @@ const normalizeAction = (action) =>
 const sortByDateDesc = (rows) =>
   [...rows].sort((a, b) => String(b.created_date || "").localeCompare(String(a.created_date || "")));
 
+const PAGE_SIZE = 10;
+
 export default function ActivityFeed() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pulse, setPulse] = useState(false);
   const [error, setError] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const load = async () => {
     try {
@@ -121,15 +124,17 @@ export default function ActivityFeed() {
     return unsubscribe;
   }, []);
 
+  const visibleLogs = logs.slice(0, visibleCount);
+
   const grouped = useMemo(() => {
     const groups = {};
-    logs.forEach((log) => {
+    visibleLogs.forEach((log) => {
       const dayLabel = formatDayLabel(log.created_date || log.updated_date);
       if (!groups[dayLabel]) groups[dayLabel] = [];
       groups[dayLabel].push(log);
     });
     return groups;
-  }, [logs]);
+  }, [visibleLogs]);
 
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">
@@ -147,7 +152,7 @@ export default function ActivityFeed() {
         </div>
       </div>
 
-      <div className="divide-y divide-border/50 max-h-[520px] overflow-y-auto">
+      <div className="divide-y divide-border/50">
         {loading ? (
           <div className="p-6 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -205,6 +210,17 @@ export default function ActivityFeed() {
           ))
         )}
       </div>
+
+      {!loading && !error && visibleCount < logs.length && (
+        <div className="px-5 py-3 border-t border-border">
+          <button
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            className="w-full text-xs font-semibold text-primary hover:text-primary/80 py-1 transition-colors"
+          >
+            Show more ({Math.min(PAGE_SIZE, logs.length - visibleCount)} more)
+          </button>
+        </div>
+      )}
     </div>
   );
 }

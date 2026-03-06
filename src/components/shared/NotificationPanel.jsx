@@ -86,7 +86,7 @@ export default function NotificationPanel() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-[360px] max-w-[calc(100vw-24px)] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed left-4 right-4 top-16 z-50 sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-[360px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
             <Bell className="w-4 h-4 text-primary" />
