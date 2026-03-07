@@ -28,6 +28,15 @@ import {
 import { Plus, ShoppingCart, Copy, Pencil, Trash2, MoreHorizontal } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { format, parseISO } from "date-fns";
+
+const formatSaleDate = (dateStr) => {
+  try {
+    return format(parseISO(String(dateStr)), "d MMM yyyy");
+  } catch {
+    return dateStr || "—";
+  }
+};
 
 const PAGE_SIZE = 20;
 
@@ -489,17 +498,76 @@ export default function Sales() {
         </div>
       ),
     },
-    { key: "date", label: "Date" },
-    { key: "buyer", label: "Buyer" },
+    {
+      key: "date",
+      label: "Date",
+      render: (v) => (
+        <span className="text-sm text-foreground font-medium whitespace-nowrap">
+          {formatSaleDate(v)}
+        </span>
+      ),
+    },
+    {
+      key: "buyer",
+      label: "Buyer",
+      render: (v) => (
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+            {String(v || "?")[0].toUpperCase()}
+          </span>
+          <span className="text-sm text-foreground">{v || "—"}</span>
+        </div>
+      ),
+    },
     {
       key: "crop_type",
       label: "Item Sold",
-      render: (_, row) => getItemLabel(row),
+      render: (_, row) => {
+        const label = getItemLabel(row);
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+            {label}
+          </span>
+        );
+      },
     },
-    { key: "greenhouse_id", label: "Greenhouse", render: (v) => (v ? (ghMap[v]?.code ?? v) : "All") },
-    { key: "kg_sold", label: "kg Sold", align: "right", render: (v) => v?.toFixed(1) },
-    { key: "price_per_kg", label: `${symbol}/kg`, align: "right", render: (v) => fmt(v, 2) },
-    { key: "revenue", label: "Revenue", align: "right", render: (v, row) => fmt(v || row.kg_sold * row.price_per_kg || 0, 2) },
+    {
+      key: "greenhouse_id",
+      label: "Greenhouse",
+      render: (v) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground">
+          {v ? (ghMap[v]?.code ?? v) : "All"}
+        </span>
+      ),
+    },
+    {
+      key: "kg_sold",
+      label: "kg Sold",
+      align: "right",
+      render: (v) => (
+        <span className="text-sm font-medium text-foreground">
+          {v != null ? v.toFixed(1) : "—"} <span className="text-xs text-muted-foreground font-normal">kg</span>
+        </span>
+      ),
+    },
+    {
+      key: "price_per_kg",
+      label: `${symbol}/kg`,
+      align: "right",
+      render: (v) => (
+        <span className="text-sm text-muted-foreground">{fmt(v, 2)}</span>
+      ),
+    },
+    {
+      key: "revenue",
+      label: "Revenue",
+      align: "right",
+      render: (v, row) => (
+        <span className="text-sm font-bold text-foreground">
+          {fmt(v || row.kg_sold * row.price_per_kg || 0, 2)}
+        </span>
+      ),
+    },
     {
       key: "id",
       label: "",

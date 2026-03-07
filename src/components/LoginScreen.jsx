@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Sprout } from "lucide-react";
 
 export default function LoginScreen({ onSuccess }) {
   const [loadingBootstrap, setLoadingBootstrap] = useState(true);
@@ -74,11 +74,21 @@ export default function LoginScreen({ onSuccess }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="flex flex-col items-center gap-2 mb-6">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-md">
+          <Sprout className="w-9 h-9 text-white" />
+        </div>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Greenhouse</h1>
+          <p className="text-sm text-slate-500">Farm Management System</p>
+        </div>
+      </div>
+
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-5">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900">{hasUsers ? "Sign In" : "Set Up Admin Account"}</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h2 className="text-lg font-semibold text-slate-900">{hasUsers ? "Sign In" : "Set Up Admin Account"}</h2>
+          <p className="text-sm text-slate-500 mt-1">
             {hasUsers
               ? "Use your account credentials to access the dashboard."
               : "Create the first admin account for this self-hosted instance."}
@@ -149,6 +159,8 @@ export default function LoginScreen({ onSuccess }) {
               : "Create Admin Account"}
         </Button>
       </div>
+
+      <p className="mt-6 text-xs text-slate-400">Crystal AI Apps</p>
     </div>
   );
 }

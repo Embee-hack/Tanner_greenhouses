@@ -101,13 +101,14 @@ export default function UserManagement() {
       />
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/40 border-b border-border text-xs">
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Name</th>
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Email</th>
-              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Role</th>
-              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Joined</th>
+              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
+              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Joined</th>
             </tr>
           </thead>
           <tbody>
@@ -149,7 +150,7 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{u.email}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 hidden sm:table-cell">
                     <Badge variant="outline" className={`text-xs border ${roleColors[u.role] || roleColors.farm_manager}`}>
                       {u.role === "admin" ? (
                         <Shield className="w-3 h-3 mr-1 inline" />
@@ -159,7 +160,7 @@ export default function UserManagement() {
                       {roleLabels[u.role] || roleLabels.farm_manager}
                     </Badge>
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground text-xs">
+                  <td className="px-5 py-3 text-muted-foreground text-xs hidden sm:table-cell">
                     {u.created_date ? new Date(u.created_date).toLocaleDateString() : "—"}
                   </td>
                 </tr>
@@ -167,6 +168,7 @@ export default function UserManagement() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showCreateModal && (

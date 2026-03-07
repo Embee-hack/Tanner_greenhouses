@@ -11,12 +11,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, DollarSign } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { format, parseISO } from "date-fns";
 
 const CATEGORIES = ["labor","fertilizer","pesticide","water","energy","packaging","transport","equipment","seeds","other"];
-const ALLOC = ["direct","by_plants","by_area","by_yield"];
 const COLORS = ["hsl(152,60%,32%)","hsl(38,95%,52%)","hsl(199,89%,48%)","hsl(280,65%,60%)","hsl(0,72%,51%)","hsl(340,75%,55%)","hsl(45,90%,50%)","hsl(170,60%,40%)","hsl(230,70%,60%)","hsl(90,55%,45%)"];
 
-const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "labor", amount: "", greenhouse_id: "", allocation_method: "direct", description: "" };
+const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "labor", amount: "", greenhouse_id: "", description: "" };
+
+const formatExpenseDate = (dateStr) => {
+  try { return format(parseISO(String(dateStr)), "d MMM yyyy"); }
+  catch { return dateStr || "—"; }
+};
+
+const CATEGORY_COLORS = {
+  labor: "bg-blue-50 text-blue-700 border-blue-200",
+  fertilizer: "bg-lime-50 text-lime-700 border-lime-200",
+  pesticide: "bg-orange-50 text-orange-700 border-orange-200",
+  water: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  energy: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  packaging: "bg-purple-50 text-purple-700 border-purple-200",
+  transport: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  equipment: "bg-slate-50 text-slate-700 border-slate-200",
+  seeds: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  other: "bg-muted text-muted-foreground border-border",
+};
 
 export default function Expenses() {
   const { fmt, symbol } = useCurrency();
@@ -48,6 +66,7 @@ export default function Expenses() {
       ...form,
       amount: parseFloat(form.amount) || 0,
       greenhouse_id: form.greenhouse_id || null,
+      allocation_method: "direct",
     });
     setSaving(false);
     setShowModal(false);
@@ -64,12 +83,45 @@ export default function Expenses() {
   const totalExpenses = records.reduce((s, r) => s + (r.amount || 0), 0);
 
   const columns = [
-    { key: "date", label: "Date" },
-    { key: "category", label: "Category", render: v => <span className="capitalize">{v?.replace(/_/g, " ")}</span> },
-    { key: "greenhouse_id", label: "Greenhouse", render: v => v ? (ghMap[v]?.code ?? v) : <span className="text-muted-foreground">Shared</span> },
-    { key: "amount", label: "Amount", align: "right", render: v => fmt(v, 2) },
-    { key: "allocation_method", label: "Allocation", render: v => <span className="text-xs capitalize">{v?.replace(/_/g, " ")}</span> },
-    { key: "description", label: "Description", render: v => v || "—" },
+    {
+      key: "date",
+      label: "Date",
+      render: v => (
+        <span className="text-sm text-foreground font-medium whitespace-nowrap">{formatExpenseDate(v)}</span>
+      ),
+    },
+    {
+      key: "category",
+      label: "Category",
+      render: v => {
+        const catClass = CATEGORY_COLORS[v] || CATEGORY_COLORS.other;
+        return (
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${catClass}`}>
+            {v?.replace(/_/g, " ") || "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "greenhouse_id",
+      label: "Greenhouse",
+      render: v => v
+        ? <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-medium">{ghMap[v]?.code ?? v}</span>
+        : <span className="text-xs text-muted-foreground italic">Shared</span>,
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      align: "right",
+      render: v => <span className="font-bold text-foreground">{fmt(v, 2)}</span>,
+    },
+    {
+      key: "description",
+      label: "Description",
+      render: v => v
+        ? <span className="text-sm text-muted-foreground">{v}</span>
+        : <span className="text-muted-foreground/50">—</span>,
+    },
   ];
 
   return (
@@ -158,12 +210,6 @@ export default function Expenses() {
               </Select>
             </FormField>
           </div>
-          <FormField label="Allocation Method">
-            <Select value={form.allocation_method} onValueChange={v => setForm(f => ({ ...f, allocation_method: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{ALLOC.map(a => <SelectItem key={a} value={a} className="capitalize">{a.replace(/_/g," ")}</SelectItem>)}</SelectContent>
-            </Select>
-          </FormField>
           <FormField label="Description">
             <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional..." />
           </FormField>
