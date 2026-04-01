@@ -1,49 +1,78 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import LoginScreen from '@/components/LoginScreen';
-import AccessDenied from '@/components/AccessDenied';
+import { Fragment } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
+import { queryClientInstance } from "@/lib/query-client";
+import { AuthProvider, useAuth } from "@/lib/AuthContext";
+import { CurrencyProvider } from "@/components/shared/CurrencyProvider.jsx";
+import UserNotRegisteredError from "@/components/UserNotRegisteredError";
+import LoginScreen from "@/components/LoginScreen";
+import AccessDenied from "@/components/AccessDenied";
+import PageNotFound from "@/lib/PageNotFound";
+import ModuleShell from "@/layouts/ModuleShell.jsx";
+import ModuleSelector from "@/modules/hub/pages/ModuleSelector.jsx";
+import { greenhouseLayout, greenhouseMainPage, greenhousePages } from "@/modules/greenhouse";
+import { poultryNavItems } from "@/modules/poultry/config.js";
+import { goatNavItems } from "@/modules/goats/config.js";
+import PoultryDashboard from "@/modules/poultry/pages/PoultryDashboard.jsx";
+import PoultryHouses from "@/modules/poultry/pages/PoultryHouses.jsx";
+import PoultryFlocks from "@/modules/poultry/pages/PoultryFlocks.jsx";
+import PoultryDailyLogs from "@/modules/poultry/pages/PoultryDailyLogs.jsx";
+import PoultryFeedRecords from "@/modules/poultry/pages/PoultryFeedRecords.jsx";
+import PoultryHealthRecords from "@/modules/poultry/pages/PoultryHealthRecords.jsx";
+import PoultryWorkers from "@/modules/poultry/pages/PoultryWorkers.jsx";
+import PoultrySales from "@/modules/poultry/pages/PoultrySales.jsx";
+import PoultryExpenses from "@/modules/poultry/pages/PoultryExpenses.jsx";
+import PoultryAnalytics from "@/modules/poultry/pages/PoultryAnalytics.jsx";
+import GoatDashboard from "@/modules/goats/pages/GoatDashboard.jsx";
+import GoatPens from "@/modules/goats/pages/GoatPens.jsx";
+import GoatRegistry from "@/modules/goats/pages/GoatRegistry.jsx";
+import GoatBreeding from "@/modules/goats/pages/GoatBreeding.jsx";
+import GoatHealthRecords from "@/modules/goats/pages/GoatHealthRecords.jsx";
+import GoatWeightLogs from "@/modules/goats/pages/GoatWeightLogs.jsx";
+import GoatFeedRecords from "@/modules/goats/pages/GoatFeedRecords.jsx";
+import GoatWorkers from "@/modules/goats/pages/GoatWorkers.jsx";
+import GoatSales from "@/modules/goats/pages/GoatSales.jsx";
+import GoatExpenses from "@/modules/goats/pages/GoatExpenses.jsx";
+import GoatAnalytics from "@/modules/goats/pages/GoatAnalytics.jsx";
 
-const { Pages, Layout, mainPage } = pagesConfig;
-const mainPageKey = mainPage ?? Object.keys(Pages)[0];
-const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
+const GreenhouseLayout = greenhouseLayout;
+const greenhouseMainPageKey = greenhouseMainPage ?? Object.keys(greenhousePages)[0];
 const adminOnlyPages = new Set(["Sales", "Expenses", "Compare", "Workers", "UserManagement"]);
 
-const LayoutWrapper = ({ children, currentPageName }) => Layout ?
-  <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <>{children}</>;
+const GreenhouseLayoutWrapper = ({ children, currentPageName }) =>
+  GreenhouseLayout ? <GreenhouseLayout currentPageName={currentPageName}>{children}</GreenhouseLayout> : <>{children}</>;
+
+const GreenhouseRouteElement = ({ pageName, Page, user }) => (
+  <GreenhouseLayoutWrapper currentPageName={pageName}>
+    {adminOnlyPages.has(pageName) && user?.role !== "admin" ? <AccessDenied /> : <Page />}
+  </GreenhouseLayoutWrapper>
+);
 
 const AuthenticatedApp = () => {
   const { user, isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
       </div>
     );
   }
 
-  // Handle authentication errors
   if (authError) {
-    if (authError.type === 'user_not_registered') {
+    if (authError.type === "user_not_registered") {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
+    }
+    if (authError.type === "auth_required") {
       return <LoginScreen onSuccess={checkAppState} />;
-    } else if (authError.type === 'unknown') {
+    }
+    if (authError.type === "unknown") {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background px-4">
           <div className="w-full max-w-lg border border-border rounded-xl bg-card p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Unable to load app</h2>
-            <p className="text-sm text-muted-foreground">
-              {authError.message || "The frontend cannot reach the API right now."}
-            </p>
+            <p className="text-sm text-muted-foreground">{authError.message || "The frontend cannot reach the API right now."}</p>
             <p className="text-xs text-muted-foreground">
               Check Render environment variables (`VITE_API_BASE_URL`, `CLIENT_ORIGIN`, `PUBLIC_BASE_URL`) and redeploy.
             </p>
@@ -61,43 +90,67 @@ const AuthenticatedApp = () => {
     }
   }
 
-  // Render the main app
   return (
     <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              {adminOnlyPages.has(path) && user?.role !== "admin" ? <AccessDenied /> : <Page />}
-            </LayoutWrapper>
-          }
-        />
+      <Route path="/" element={<Navigate to="/modules" replace />} />
+      <Route path="/modules" element={<ModuleSelector />} />
+      <Route path="/greenhouse" element={<Navigate to={`/${greenhouseMainPageKey}`} replace />} />
+
+      <Route path="/poultry" element={<ModuleShell moduleKey="poultry" navItems={poultryNavItems} />}>
+        <Route index element={<PoultryDashboard />} />
+        <Route path="houses" element={<PoultryHouses />} />
+        <Route path="flocks" element={<PoultryFlocks />} />
+        <Route path="daily-logs" element={<PoultryDailyLogs />} />
+        <Route path="feed-records" element={<PoultryFeedRecords />} />
+        <Route path="health-records" element={<PoultryHealthRecords />} />
+        <Route path="workers" element={<PoultryWorkers />} />
+        <Route path="sales" element={<PoultrySales />} />
+        <Route path="expenses" element={<PoultryExpenses />} />
+        <Route path="analytics" element={<PoultryAnalytics />} />
+      </Route>
+
+      <Route path="/goats" element={<ModuleShell moduleKey="goats" navItems={goatNavItems} />}>
+        <Route index element={<GoatDashboard />} />
+        <Route path="pens" element={<GoatPens />} />
+        <Route path="registry" element={<GoatRegistry />} />
+        <Route path="breeding" element={<GoatBreeding />} />
+        <Route path="health-records" element={<GoatHealthRecords />} />
+        <Route path="weight-logs" element={<GoatWeightLogs />} />
+        <Route path="feed-records" element={<GoatFeedRecords />} />
+        <Route path="workers" element={<GoatWorkers />} />
+        <Route path="sales" element={<GoatSales />} />
+        <Route path="expenses" element={<GoatExpenses />} />
+        <Route path="analytics" element={<GoatAnalytics />} />
+      </Route>
+
+      {Object.entries(greenhousePages).map(([pageName, Page]) => (
+        <Fragment key={pageName}>
+          <Route path={`/${pageName}`} element={<GreenhouseRouteElement pageName={pageName} Page={Page} user={user} />} />
+          <Route
+            path={`/greenhouse/${pageName}`}
+            element={<GreenhouseRouteElement pageName={pageName} Page={Page} user={user} />}
+          />
+        </Fragment>
       ))}
+
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
 };
 
-
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
+        <CurrencyProvider>
+          <Router>
+            <AuthenticatedApp />
+          </Router>
+          <Toaster />
+        </CurrencyProvider>
       </QueryClientProvider>
     </AuthProvider>
-  )
+  );
 }
 
-export default App
+export default App;

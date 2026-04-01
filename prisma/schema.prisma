@@ -27,3 +27,300 @@ model EntityRecord {
 
   @@index([entity])
 }
+
+model PoultryHouse {
+  id         String         @id @default(uuid())
+  name       String
+  type       String?
+  capacity   Int?
+  status     String         @default("active")
+  notes      String?
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+  flocks     PoultryFlock[]
+
+  @@map("poultry_houses")
+}
+
+model PoultryFlock {
+  id                 String             @id @default(uuid())
+  poultry_house_id   String
+  flock_code         String             @unique
+  bird_type          String
+  breed              String
+  start_date         DateTime
+  initial_bird_count Int
+  source             String?
+  purpose            String?
+  status             String             @default("active")
+  notes              String?
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  poultry_house      PoultryHouse       @relation(fields: [poultry_house_id], references: [id])
+  daily_logs         PoultryDailyLog[]
+  feed_logs          PoultryFeedLog[]
+  health_logs        PoultryHealthLog[]
+  sales              PoultrySale[]
+  expenses           PoultryExpense[]
+
+  @@index([poultry_house_id])
+  @@index([status])
+  @@map("poultry_flocks")
+}
+
+model PoultryDailyLog {
+  id              String       @id @default(uuid())
+  flock_id        String
+  log_date        DateTime
+  eggs_collected  Int          @default(0)
+  bad_eggs        Int          @default(0)
+  mortality_count Int          @default(0)
+  culled_count    Int          @default(0)
+  feed_consumed   Float?
+  water_consumed  Float?
+  avg_weight      Float?
+  temperature     Float?
+  notes           String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  flock           PoultryFlock @relation(fields: [flock_id], references: [id])
+
+  @@index([flock_id])
+  @@index([log_date])
+  @@map("poultry_daily_logs")
+}
+
+model PoultryFeedLog {
+  id         String       @id @default(uuid())
+  flock_id   String
+  log_date   DateTime
+  feed_type  String
+  quantity   Float
+  unit       String
+  cost       Float?
+  supplier   String?
+  notes      String?
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  flock      PoultryFlock @relation(fields: [flock_id], references: [id])
+
+  @@index([flock_id])
+  @@index([log_date])
+  @@map("poultry_feed_logs")
+}
+
+model PoultryHealthLog {
+  id             String       @id @default(uuid())
+  flock_id       String
+  log_date       DateTime
+  issue_type     String
+  symptoms       String?
+  affected_count Int?
+  treatment      String?
+  medication     String?
+  vaccination    String?
+  notes          String?
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+  flock          PoultryFlock @relation(fields: [flock_id], references: [id])
+
+  @@index([flock_id])
+  @@index([log_date])
+  @@map("poultry_health_logs")
+}
+
+model PoultrySale {
+  id             String        @id @default(uuid())
+  flock_id       String?
+  sale_date      DateTime
+  sale_type      String
+  quantity       Float
+  unit_price     Float
+  total_amount   Float
+  buyer          String?
+  payment_status String
+  notes          String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  flock          PoultryFlock? @relation(fields: [flock_id], references: [id])
+
+  @@index([flock_id])
+  @@index([sale_date])
+  @@map("poultry_sales")
+}
+
+model PoultryExpense {
+  id           String        @id @default(uuid())
+  flock_id     String?
+  expense_date DateTime
+  category     String
+  amount       Float
+  description  String?
+  created_at   DateTime      @default(now())
+  updated_at   DateTime      @updatedAt
+  flock        PoultryFlock? @relation(fields: [flock_id], references: [id])
+
+  @@index([flock_id])
+  @@index([expense_date])
+  @@map("poultry_expenses")
+}
+
+model GoatPen {
+  id         String        @id @default(uuid())
+  name       String
+  type       String?
+  capacity   Int?
+  status     String        @default("active")
+  notes      String?
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+  goats      Goat[]
+  feed_logs  GoatFeedLog[]
+  expenses   GoatExpense[]
+
+  @@map("goat_pens")
+}
+
+model Goat {
+  id               String            @id @default(uuid())
+  tag_number       String            @unique
+  name             String?
+  breed            String
+  sex              String
+  date_of_birth    DateTime?
+  estimated_age    String?
+  acquisition_date DateTime?
+  source           String?
+  pen_id           String?
+  status           String            @default("active")
+  current_weight   Float?
+  notes            String?
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  pen              GoatPen?          @relation(fields: [pen_id], references: [id])
+  breeding_as_doe  GoatBreedingLog[] @relation("DoeGoat")
+  breeding_as_buck GoatBreedingLog[] @relation("BuckGoat")
+  health_logs      GoatHealthLog[]
+  weight_logs      GoatWeightLog[]
+  feed_logs        GoatFeedLog[]
+  sales            GoatSale[]
+  expenses         GoatExpense[]
+
+  @@index([pen_id])
+  @@index([status])
+  @@map("goats")
+}
+
+model GoatBreedingLog {
+  id                    String    @id @default(uuid())
+  doe_goat_id           String
+  buck_goat_id          String?
+  mating_date           DateTime
+  expected_kidding_date DateTime?
+  actual_kidding_date   DateTime?
+  kids_born_count       Int       @default(0)
+  kids_alive_count      Int       @default(0)
+  notes                 String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  doe_goat              Goat      @relation("DoeGoat", fields: [doe_goat_id], references: [id])
+  buck_goat             Goat?     @relation("BuckGoat", fields: [buck_goat_id], references: [id])
+
+  @@index([doe_goat_id])
+  @@index([buck_goat_id])
+  @@index([mating_date])
+  @@map("goat_breeding_logs")
+}
+
+model GoatHealthLog {
+  id          String   @id @default(uuid())
+  goat_id     String
+  log_date    DateTime
+  issue_type  String
+  symptoms    String?
+  treatment   String?
+  medication  String?
+  vaccination String?
+  deworming   String?
+  vet_notes   String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  goat        Goat     @relation(fields: [goat_id], references: [id])
+
+  @@index([goat_id])
+  @@index([log_date])
+  @@map("goat_health_logs")
+}
+
+model GoatWeightLog {
+  id         String   @id @default(uuid())
+  goat_id    String
+  log_date   DateTime
+  weight     Float
+  notes      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  goat       Goat     @relation(fields: [goat_id], references: [id])
+
+  @@index([goat_id])
+  @@index([log_date])
+  @@map("goat_weight_logs")
+}
+
+model GoatFeedLog {
+  id         String   @id @default(uuid())
+  goat_id    String?
+  pen_id     String?
+  log_date   DateTime
+  feed_type  String
+  quantity   Float
+  unit       String
+  cost       Float?
+  notes      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  goat       Goat?    @relation(fields: [goat_id], references: [id])
+  pen        GoatPen? @relation(fields: [pen_id], references: [id])
+
+  @@index([goat_id])
+  @@index([pen_id])
+  @@index([log_date])
+  @@map("goat_feed_logs")
+}
+
+model GoatSale {
+  id             String   @id @default(uuid())
+  goat_id        String
+  sale_date      DateTime
+  sale_type      String?
+  amount         Float
+  buyer          String?
+  payment_status String
+  notes          String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  goat           Goat     @relation(fields: [goat_id], references: [id])
+
+  @@index([goat_id])
+  @@index([sale_date])
+  @@map("goat_sales")
+}
+
+model GoatExpense {
+  id           String   @id @default(uuid())
+  goat_id      String?
+  pen_id       String?
+  expense_date DateTime
+  category     String
+  amount       Float
+  description  String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  goat         Goat?    @relation(fields: [goat_id], references: [id])
+  pen          GoatPen? @relation(fields: [pen_id], references: [id])
+
+  @@index([goat_id])
+  @@index([pen_id])
+  @@index([expense_date])
+  @@map("goat_expenses")
+}

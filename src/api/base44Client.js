@@ -199,6 +199,12 @@ const createEntityClient = (entityName) => ({
   },
 
   async delete(id) {
+    if (Array.isArray(id)) {
+      return request(`/api/entities/${entityName}/bulk-delete`, {
+        method: "POST",
+        data: { ids: id },
+      });
+    }
     return request(`/api/entities/${entityName}/${id}`, { method: "DELETE" });
   },
 

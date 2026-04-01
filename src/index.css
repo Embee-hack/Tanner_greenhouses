@@ -85,6 +85,41 @@
   * {
     @apply border-border;
   }
+
+  .module-theme-poultry {
+    --primary: 26 92% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 80% 94%;
+    --secondary-foreground: 25 45% 22%;
+    --muted: 30 55% 95%;
+    --muted-foreground: 25 15% 43%;
+    --accent: 34 96% 58%;
+    --accent-foreground: 24 70% 15%;
+    --border: 28 34% 86%;
+    --input: 28 34% 86%;
+    --ring: 26 92% 52%;
+    --chart-1: 26 92% 52%;
+    --chart-2: 34 96% 58%;
+    --chart-3: 18 82% 56%;
+  }
+
+  .module-theme-goats {
+    --primary: 28 42% 31%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 34 30% 93%;
+    --secondary-foreground: 28 28% 20%;
+    --muted: 34 26% 95%;
+    --muted-foreground: 28 12% 40%;
+    --accent: 32 48% 58%;
+    --accent-foreground: 28 40% 14%;
+    --border: 30 22% 84%;
+    --input: 30 22% 84%;
+    --ring: 28 42% 31%;
+    --chart-1: 28 42% 31%;
+    --chart-2: 32 48% 58%;
+    --chart-3: 20 42% 46%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;

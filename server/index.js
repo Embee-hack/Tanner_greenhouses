@@ -10,6 +10,8 @@ import { randomUUID, randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createPoultryRouter } from "./modules/poultry/router.js";
+import { createGoatRouter } from "./modules/goats/router.js";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -828,6 +830,24 @@ app.post("/api/users/invite", requireAuth, requireAdmin, async (req, res) => {
   });
 });
 
+app.use(
+  "/api/poultry",
+  createPoultryRouter({
+    prisma,
+    requireAuth,
+    logActivitySafe,
+  })
+);
+
+app.use(
+  "/api/goats",
+  createGoatRouter({
+    prisma,
+    requireAuth,
+    logActivitySafe,
+  })
+);
+
 app.get("/api/entities/:entity", requireAuth, async (req, res) => {
   const { entity } = req.params;
   const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;
@@ -937,6 +957,77 @@ app.post("/api/entities/:entity", requireAuth, async (req, res) => {
     details: `${humanizeEntity(entity)} record created`,
   });
   res.status(201).json(data);
+});
+
+app.post("/api/entities/:entity/bulk-delete", requireAuth, async (req, res) => {
+  const { entity } = req.params;
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+
+  if (ids.length === 0) {
+    return res.status(400).json({ error: "Select at least one record to delete" });
+  }
+
+  if (INTERNAL_SERVER_ONLY_ENTITIES.has(entity)) {
+    return res.status(403).json({ error: `${entity} is managed internally by the server` });
+  }
+
+  if (!canWriteEntity(req.user, entity)) {
+    return res.status(403).json({ error: "You do not have permission to delete these records" });
+  }
+
+  if (entity === "User") {
+    if (!isAdmin(req.user)) return res.status(403).json({ error: "Admin access required" });
+    if (ids.includes(req.user.id)) return res.status(400).json({ error: "You cannot delete your own user" });
+
+    const users = await prisma.user.findMany({ where: { id: { in: ids } } });
+    if (users.length === 0) return res.status(404).json({ error: "User not found" });
+
+    await prisma.user.deleteMany({ where: { id: { in: users.map((user) => user.id) } } });
+
+    users.map(toPublicUser).forEach((payload) => {
+      broadcastEntityEvent({ entity, type: "delete", id: payload.id, data: payload });
+    });
+
+    await logActivitySafe({
+      action: "bulk_delete",
+      entity,
+      actor: req.user,
+      summary: `Deleted ${users.length} users`,
+      details: "User records deleted in bulk",
+      metadata: { count: users.length, ids: users.map((user) => user.id) },
+    });
+
+    return res.json({ ok: true, count: users.length, ids: users.map((user) => user.id) });
+  }
+
+  const existingRows = await prisma.entityRecord.findMany({
+    where: { entity, id: { in: ids } },
+  });
+
+  if (existingRows.length === 0) {
+    return res.status(404).json({ error: `${entity} record not found` });
+  }
+
+  await prisma.entityRecord.deleteMany({
+    where: { entity, id: { in: existingRows.map((row) => row.id) } },
+  });
+
+  existingRows.forEach((row) => {
+    broadcastEntityEvent({ entity, type: "delete", id: row.id, data: toEntityOutput(row) });
+  });
+
+  await logActivitySafe({
+    action: "bulk_delete",
+    entity,
+    actor: req.user,
+    summary: `Deleted ${existingRows.length} ${humanizeEntity(entity)} records`,
+    details: `${humanizeEntity(entity)} records deleted in bulk`,
+    metadata: { count: existingRows.length, ids: existingRows.map((row) => row.id) },
+  });
+
+  res.json({ ok: true, count: existingRows.length, ids: existingRows.map((row) => row.id) });
 });
 
 app.patch("/api/entities/:entity/:id", requireAuth, async (req, res) => {

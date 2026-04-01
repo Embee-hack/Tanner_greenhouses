@@ -1,6 +1,11 @@
-# Tanner Greenhouse Dashboard (Self-Hosted)
+# Tanner Farm Management Platform (Self-Hosted)
 
 This project is now independent of Base44.
+
+The platform now has three modules behind a shared auth and app shell:
+- `Greenhouse`: preserved as the approved, locked module
+- `Poultry`: flock-based management
+- `Goat Farm`: individual-animal management
 
 Current stack:
 - Frontend: React + Vite (`src/`)
@@ -8,6 +13,17 @@ Current stack:
 - Database: Postgres (Neon-ready via `DATABASE_URL`)
 - Auth: JWT-based email/password login
 - File uploads: local disk (`/uploads`) served by API
+
+Module routing:
+- `/modules`: module selector after login
+- existing greenhouse routes such as `/Dashboard`, `/Greenhouses`, `/Harvests` remain intact
+- `/poultry/*`: poultry dashboards, records, forms, analytics
+- `/goats/*`: goat dashboards, records, forms, analytics
+
+Database notes:
+- Existing greenhouse data remains on the legacy `EntityRecord` model and is unchanged
+- Poultry and goat data now use dedicated Prisma tables
+- SQL migration artifact for the module tables is in `prisma/migrations/20260312120000_add_farm_modules/migration.sql`
 
 Role model:
 - `admin`: full access (finance + users + all operations)
@@ -46,6 +62,8 @@ cp .env.local.example .env.local
 ```bash
 npm run db:push
 ```
+
+If you prefer reviewing the SQL first, inspect the migration file in `prisma/migrations/20260312120000_add_farm_modules/`.
 
 7. Run API + frontend together:
 

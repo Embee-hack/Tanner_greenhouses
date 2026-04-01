@@ -3,8 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Sprout } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginScreen({ onSuccess }) {
+  const navigate = useNavigate();
   const [loadingBootstrap, setLoadingBootstrap] = useState(true);
   const [hasUsers, setHasUsers] = useState(true);
   const [email, setEmail] = useState("");
@@ -32,6 +34,7 @@ export default function LoginScreen({ onSuccess }) {
     try {
       await base44.auth.login(email, password);
       await onSuccess?.();
+      navigate("/modules", { replace: true });
     } catch (err) {
       setError(err?.message || "Login failed");
     } finally {
@@ -58,6 +61,7 @@ export default function LoginScreen({ onSuccess }) {
         full_name: fullName || undefined,
       });
       await onSuccess?.();
+      navigate("/modules", { replace: true });
     } catch (err) {
       setError(err?.message || "Setup failed");
     } finally {
@@ -80,7 +84,7 @@ export default function LoginScreen({ onSuccess }) {
           <Sprout className="w-9 h-9 text-white" />
         </div>
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Greenhouse</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tanner Farms</h1>
           <p className="text-sm text-slate-500">Farm Management System</p>
         </div>
       </div>
