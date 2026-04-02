@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, ShoppingCart } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 import { formatDateLabel, normalizeOptionalValue } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -20,16 +23,25 @@ const initialValues = {
 
 export default function PoultrySales() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [flocks, setFlocks] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [flockRows, saleRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.sales.list()]);
-    setFlocks(flockRows);
-    setRecords(saleRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [flockRows, saleRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.sales.list()]);
+      setFlocks(flockRows);
+      setRecords(saleRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load poultry sales."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -70,7 +82,9 @@ export default function PoultrySales() {
       ]}
       records={records}
       loading={loading}
-      summaryCards={summaryCards}
+      loadError={loadError}
+      onRetry={load}
+      summaryCards={isAdmin ? summaryCards : []}
       emptyState={{
         icon: ShoppingCart,
         title: "No poultry sales yet",

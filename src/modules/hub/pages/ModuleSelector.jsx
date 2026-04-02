@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Clock3 } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDashed, Clock3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { goatsClient, poultryClient } from "@/api/moduleClient";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import HeaderControls from "@/components/navigation/HeaderControls.jsx";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors.js";
 import { moduleList, getModuleOpenPath, getStoredModuleKey, moduleRegistry } from "@/lib/modules";
 
 const defaultStats = {
@@ -14,43 +16,94 @@ const defaultStats = {
   goats: "Loading summary...",
 };
 
+const defaultLaunchReadiness = [
+  { key: "greenhouse", label: "Greenhouse", ready: false, note: "Checking setup..." },
+  { key: "poultry", label: "Poultry", ready: false, note: "Checking setup..." },
+  { key: "goats", label: "Goats", ready: false, note: "Checking setup..." },
+];
+
 export default function ModuleSelector() {
   const [stats, setStats] = useState(defaultStats);
+  const [launchReadiness, setLaunchReadiness] = useState(defaultLaunchReadiness);
+  const [loadError, setLoadError] = useState("");
+
+  const loadStats = async () => {
+    try {
+      const [greenhouses, cycles, inventoryItems, poultry, goats] = await Promise.all([
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.CropCycle.list(),
+        base44.entities.InventoryItem.list("name"),
+        poultryClient.getDashboard(),
+        goatsClient.getDashboard(),
+      ]);
+
+      const activeGreenhouses = greenhouses.filter((item) => item.status === "active").length;
+      const activeCycles = cycles.filter((item) => item.status === "active").length;
+      const activeFlocks = poultry?.summary?.active_flocks || 0;
+      const activeHouses = poultry?.summary?.active_houses || 0;
+      const activePens = goats?.summary?.active_pens || 0;
+      const totalGoats = goats?.summary?.total_goats || 0;
+
+      setStats({
+        greenhouse: `${activeGreenhouses} active greenhouses`,
+        poultry: `${activeFlocks} active flocks`,
+        goats: `${totalGoats} registered goats`,
+      });
+      setLaunchReadiness([
+        {
+          key: "greenhouse",
+          label: "Greenhouse",
+          ready: activeGreenhouses > 0 && activeCycles > 0 && inventoryItems.length > 0,
+          note:
+            activeGreenhouses === 0
+              ? "Add your first greenhouse."
+              : activeCycles === 0
+                ? "Start an active crop cycle."
+                : inventoryItems.length === 0
+                  ? "Add inventory before operations start."
+                  : "Core greenhouse operations are ready.",
+        },
+        {
+          key: "poultry",
+          label: "Poultry",
+          ready: activeHouses > 0 && activeFlocks > 0,
+          note:
+            activeHouses === 0
+              ? "Create a poultry house."
+              : activeFlocks === 0
+                ? "Register the first flock."
+                : "Poultry operations are ready.",
+        },
+        {
+          key: "goats",
+          label: "Goats",
+          ready: activePens > 0 && totalGoats > 0,
+          note:
+            activePens === 0
+              ? "Create a goat pen."
+              : totalGoats === 0
+                ? "Register your first goat."
+                : "Goat operations are ready.",
+        },
+      ]);
+      setLoadError("");
+    } catch (error) {
+      setStats({
+        greenhouse: "Greenhouse data ready",
+        poultry: "Poultry module ready",
+        goats: "Goat module ready",
+      });
+      setLaunchReadiness([
+        { key: "greenhouse", label: "Greenhouse", ready: false, note: "Could not confirm readiness." },
+        { key: "poultry", label: "Poultry", ready: false, note: "Could not confirm readiness." },
+        { key: "goats", label: "Goats", ready: false, note: "Could not confirm readiness." },
+      ]);
+      setLoadError(getErrorMessage(error, "Failed to load launch readiness data."));
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-
-    const loadStats = async () => {
-      try {
-        const [greenhouses, poultry, goats] = await Promise.all([
-          base44.entities.Greenhouse.list("code"),
-          poultryClient.getDashboard(),
-          goatsClient.getDashboard(),
-        ]);
-
-        if (cancelled) return;
-
-        setStats({
-          greenhouse: `${greenhouses.filter((item) => item.status === "active").length} active greenhouses`,
-          poultry: `${poultry?.summary?.active_flocks || 0} active flocks`,
-          goats: `${goats?.summary?.total_goats || 0} registered goats`,
-        });
-      } catch (_error) {
-        if (!cancelled) {
-          setStats({
-            greenhouse: "Greenhouse data ready",
-            poultry: "Poultry module ready",
-            goats: "Goat module ready",
-          });
-        }
-      }
-    };
-
     loadStats();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const lastModuleKey = useMemo(() => getStoredModuleKey(), []);
@@ -89,6 +142,40 @@ export default function ModuleSelector() {
                 </Button>
               </div>
             ) : null}
+          </section>
+
+          <ErrorBanner message={loadError} onRetry={loadStats} />
+
+          <section className="rounded-[28px] border border-border bg-card p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Launch Readiness</p>
+                <h2 className="text-xl font-bold text-foreground mt-1">What still needs setup</h2>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {launchReadiness.filter((item) => item.ready).length} of {launchReadiness.length} modules ready
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {launchReadiness.map((item) => (
+                <div key={item.key} className="rounded-2xl border border-border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {item.ready ? <CheckCircle2 className="h-4 w-4 text-success" /> : <CircleDashed className="h-4 w-4 text-muted-foreground" />}
+                      <h3 className="text-sm font-semibold text-foreground">{item.label}</h3>
+                    </div>
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", item.ready ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
+                      {item.ready ? "Ready" : "Setup Needed"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-3">{item.note}</p>
+                  <Button asChild variant="outline" size="sm" className="mt-4">
+                    <Link to={getModuleOpenPath(item.key)}>Open {item.label}</Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">

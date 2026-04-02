@@ -10,6 +10,8 @@ import {
   YAxis,
 } from "recharts";
 import StatCard from "@/components/dashboard/StatCard";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import AnalyticsPanel from "@/modules/shared/AnalyticsPanel.jsx";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -18,16 +20,25 @@ export default function GoatAnalytics() {
   const { fmt } = useCurrency();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
-      const result = await goatsClient.getAnalytics();
-      if (!cancelled) {
-        setData(result);
-        setLoading(false);
+      try {
+        setLoading(true);
+        const result = await goatsClient.getAnalytics();
+        if (!cancelled) {
+          setData(result);
+          setLoadError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(getErrorMessage(error, "Failed to load goat analytics."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -51,6 +62,20 @@ export default function GoatAnalytics() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      <ErrorBanner message={loadError} onRetry={() => {
+        setData(null);
+        setLoading(true);
+        goatsClient.getAnalytics()
+          .then((result) => {
+            setData(result);
+            setLoadError("");
+          })
+          .catch((error) => {
+            setLoadError(getErrorMessage(error, "Failed to load goat analytics."));
+          })
+          .finally(() => setLoading(false));
+      }} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Breeding Success" value={`${analytics.breeding_success_rate || 0}%`} subtitle="Breeding logs with actual kidding date" icon={HeartPulse} color="success" loading={loading} />
         <StatCard title="Kidding Rate" value={`${analytics.kidding_rate || 0}%`} subtitle="Kids alive against kids born" icon={HeartPulse} color="warning" loading={loading} />

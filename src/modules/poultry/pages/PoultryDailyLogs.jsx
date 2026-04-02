@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Plus, TrendingUp } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 import { formatDateLabel } from "@/modules/shared/formatters.js";
 
@@ -22,13 +23,20 @@ export default function PoultryDailyLogs() {
   const [flocks, setFlocks] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [flockRows, logRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.dailyLogs.list()]);
-    setFlocks(flockRows);
-    setRecords(logRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [flockRows, logRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.dailyLogs.list()]);
+      setFlocks(flockRows);
+      setRecords(logRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load poultry daily logs."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -69,6 +77,8 @@ export default function PoultryDailyLogs() {
       ]}
       records={records}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: ClipboardList,

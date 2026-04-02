@@ -11,26 +11,41 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import StatCard from "@/components/dashboard/StatCard";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import AnalyticsPanel from "@/modules/shared/AnalyticsPanel.jsx";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { formatShortDate } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 
 export default function GoatDashboard() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
-      const result = await goatsClient.getDashboard();
-      if (!cancelled) {
-        setData(result);
-        setLoading(false);
+      try {
+        setLoading(true);
+        const result = await goatsClient.getDashboard();
+        if (!cancelled) {
+          setData(result);
+          setLoadError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(getErrorMessage(error, "Failed to load the goat dashboard."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -43,9 +58,24 @@ export default function GoatDashboard() {
 
   const summary = data?.summary || {};
   const charts = data?.charts || {};
+  const analytics = data?.analytics || {};
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      <ErrorBanner message={loadError} onRetry={() => {
+        setData(null);
+        setLoading(true);
+        goatsClient.getDashboard()
+          .then((result) => {
+            setData(result);
+            setLoadError("");
+          })
+          .catch((error) => {
+            setLoadError(getErrorMessage(error, "Failed to load the goat dashboard."));
+          })
+          .finally(() => setLoading(false));
+      }} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatCard title="Total Goats" value={summary.total_goats || 0} subtitle="Active goats in the herd" icon={PawPrint} color="primary" loading={loading} />
         <StatCard title="Male Goats" value={summary.male_goats || 0} subtitle="Active male goats" icon={Users} color="accent" loading={loading} />
@@ -92,18 +122,32 @@ export default function GoatDashboard() {
           </ResponsiveContainer>
         </AnalyticsPanel>
 
-        <AnalyticsPanel title="Sales and Expense Trend" subtitle="Monthly goat cashflow">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={(charts.sales_trend || []).map((row, index) => ({ ...row, expense: charts.expense_trend?.[index]?.amount || 0 }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
-              <XAxis dataKey="period" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => fmt(value)} />
-              <Tooltip formatter={(value) => fmt(value)} />
-              <Bar dataKey="amount" name="Sales" fill="hsl(152,60%,32%)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="expense" name="Expenses" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </AnalyticsPanel>
+        {isAdmin ? (
+          <AnalyticsPanel title="Sales and Expense Trend" subtitle="Monthly goat cashflow">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={(charts.sales_trend || []).map((row, index) => ({ ...row, expense: charts.expense_trend?.[index]?.amount || 0 }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
+                <XAxis dataKey="period" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => fmt(value)} />
+                <Tooltip formatter={(value) => fmt(value)} />
+                <Bar dataKey="amount" name="Sales" fill="hsl(152,60%,32%)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="expense" name="Expenses" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </AnalyticsPanel>
+        ) : (
+          <AnalyticsPanel title="Herd Status Overview" subtitle="Current herd distribution by lifecycle status">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={analytics.herd_count_by_status || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Bar dataKey="value" fill="hsl(152,60%,32%)" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </AnalyticsPanel>
+        )}
       </div>
 
       <AnalyticsPanel title="Recent Health Alerts" subtitle="Latest goat health records">

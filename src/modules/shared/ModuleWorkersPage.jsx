@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Plus, UserCheck, Users, Wallet } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
 import { formatDateLabel, normalizeOptionalValue } from "@/modules/shared/formatters.js";
 
@@ -23,14 +26,23 @@ export default function ModuleWorkersPage({
   rolePlaceholder,
 }) {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const rows = await base44.entities[entityName].list("-hire_date", 200);
-    setRecords(rows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const rows = await base44.entities[entityName].list("-hire_date", 200);
+      setRecords(rows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, `Failed to load ${moduleLabel.toLowerCase()} workers.`));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -53,10 +65,12 @@ export default function ModuleWorkersPage({
     return [
       { title: "Total Workers", value: records.length, subtitle: `${moduleLabel} team members`, icon: Users, color: "primary" },
       { title: "Active Workers", value: activeWorkers, subtitle: "Currently on duty", icon: UserCheck, color: "success" },
-      { title: "Monthly Payroll", value: fmt(monthlyPayroll), subtitle: "Active worker salaries", icon: Wallet, color: "accent" },
+      ...(isAdmin
+        ? [{ title: "Monthly Payroll", value: fmt(monthlyPayroll), subtitle: "Active worker salaries", icon: Wallet, color: "accent" }]
+        : [{ title: "On Leave", value: onLeaveWorkers, subtitle: "Temporarily unavailable", icon: BriefcaseBusiness, color: "accent" }]),
       { title: "Assigned Workers", value: assignedWorkers, subtitle: `Assigned to a ${assignmentLabel.toLowerCase()}`, icon: BriefcaseBusiness, color: "warning" },
     ];
-  }, [assignmentField, assignmentLabel, fmt, moduleLabel, records]);
+  }, [assignmentField, assignmentLabel, fmt, isAdmin, moduleLabel, records]);
 
   return (
     <RecordManagerPage
@@ -74,11 +88,13 @@ export default function ModuleWorkersPage({
         },
         { key: "phone", label: "Phone", render: (value) => value || "—" },
         { key: "status", label: "Status", render: (value) => <StatusBadge status={value} /> },
-        { key: "salary", label: "Salary", render: (value) => (value ? fmt(value) : "—") },
+        ...(isAdmin ? [{ key: "salary", label: "Salary", render: (value) => (value ? fmt(value) : "—") }] : []),
         { key: "hire_date", label: "Hire Date", render: (value) => formatDateLabel(value) },
       ]}
       records={records}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: Users,
@@ -111,7 +127,7 @@ export default function ModuleWorkersPage({
           type: "select",
           options: WORKER_STATUS_OPTIONS,
         },
-        { key: "salary", label: "Monthly salary", type: "number", min: 0, step: "0.01", placeholder: "0.00" },
+        ...(isAdmin ? [{ key: "salary", label: "Monthly salary", type: "number", min: 0, step: "0.01", placeholder: "0.00" }] : []),
         { key: "hire_date", label: "Hire date", type: "date" },
         { key: "notes", label: "Notes", type: "textarea", fullWidth: true, placeholder: "Optional worker notes" },
       ]}

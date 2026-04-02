@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Phone, Building2, User, Settings2, ImageIcon } from "lucide-react";
 import Modal from "@/components/shared/Modal";
 import PageHeader from "@/components/shared/PageHeader";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import FormField from "@/components/shared/FormField";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { useCurrency } from "@/components/shared/CurrencyProvider";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const DEFAULT_ROLE_OPTIONS = [
   { key: "farm_manager", name: "Farm Manager" },
@@ -47,6 +51,8 @@ const toCatalogRole = (rawRole) => {
 
 export default function Workers() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [workers, setWorkers] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [roleCatalog, setRoleCatalog] = useState([]);
@@ -61,18 +67,26 @@ export default function Workers() {
   const [newRoleName, setNewRoleName] = useState("");
   const [roleError, setRoleError] = useState("");
   const [savingRole, setSavingRole] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.Worker.list(),
-      base44.entities.Greenhouse.list(),
-      base44.entities.WorkerRole.list("name"),
-    ]).then(([workersData, greenhouseData, rolesData]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [workersData, greenhouseData, rolesData] = await Promise.all([
+        base44.entities.Worker.list(),
+        base44.entities.Greenhouse.list(),
+        base44.entities.WorkerRole.list("name"),
+      ]);
       setWorkers(workersData);
       setGreenhouses(greenhouseData);
       setRoleCatalog(rolesData);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load workers."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -127,6 +141,7 @@ export default function Workers() {
   const openCreate = () => {
     setEditing(null);
     setPhotoError("");
+    setError("");
     setForm({
       status: "active",
       role: defaultRoleKey,
@@ -140,6 +155,7 @@ export default function Workers() {
   const openEdit = (worker) => {
     setEditing(worker);
     setPhotoError("");
+    setError("");
     setForm({
       ...worker,
       greenhouse_id: worker.greenhouse_id || NONE_VALUE,
@@ -149,29 +165,38 @@ export default function Workers() {
   };
 
   const handleSave = async () => {
-    const payload = {
-      ...form,
-      role: normalizeRoleKey(form.role) || defaultRoleKey,
-      greenhouse_id: form.greenhouse_id && form.greenhouse_id !== NONE_VALUE ? form.greenhouse_id : null,
-      salary: form.salary === "" || form.salary == null ? null : Number(form.salary),
-    };
+    setError("");
+    try {
+      const payload = {
+        ...form,
+        role: normalizeRoleKey(form.role) || defaultRoleKey,
+        greenhouse_id: form.greenhouse_id && form.greenhouse_id !== NONE_VALUE ? form.greenhouse_id : null,
+        salary: form.salary === "" || form.salary == null ? null : Number(form.salary),
+      };
 
-    if (Number.isNaN(payload.salary)) payload.salary = null;
+      if (Number.isNaN(payload.salary)) payload.salary = null;
 
-    if (editing) {
-      const updated = await base44.entities.Worker.update(editing.id, payload);
-      setWorkers((prev) => prev.map((worker) => (worker.id === editing.id ? updated : worker)));
-    } else {
-      const created = await base44.entities.Worker.create(payload);
-      setWorkers((prev) => [...prev, created]);
+      if (editing) {
+        const updated = await base44.entities.Worker.update(editing.id, payload);
+        setWorkers((prev) => prev.map((worker) => (worker.id === editing.id ? updated : worker)));
+      } else {
+        const created = await base44.entities.Worker.create(payload);
+        setWorkers((prev) => [...prev, created]);
+      }
+
+      setShowModal(false);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save worker."));
     }
-
-    setShowModal(false);
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.Worker.delete(id);
-    setWorkers((prev) => prev.filter((worker) => worker.id !== id));
+    try {
+      await base44.entities.Worker.delete(id);
+      setWorkers((prev) => prev.filter((worker) => worker.id !== id));
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to delete worker."));
+    }
   };
 
   const openRoleManager = () => {
@@ -195,14 +220,19 @@ export default function Workers() {
 
     setRoleError("");
     setSavingRole(true);
-    const created = await base44.entities.WorkerRole.create({
-      key,
-      name,
-      status: "active",
-    });
-    setRoleCatalog((prev) => [...prev, created]);
-    setNewRoleName("");
-    setSavingRole(false);
+    try {
+      const created = await base44.entities.WorkerRole.create({
+        key,
+        name,
+        status: "active",
+      });
+      setRoleCatalog((prev) => [...prev, created]);
+      setNewRoleName("");
+    } catch (err) {
+      setRoleError(getErrorMessage(err, "Failed to create worker role."));
+    } finally {
+      setSavingRole(false);
+    }
   };
 
   const handleDeleteCustomRole = async (role) => {
@@ -212,8 +242,12 @@ export default function Workers() {
       return;
     }
 
-    await base44.entities.WorkerRole.delete(role.id);
-    setRoleCatalog((prev) => prev.filter((item) => item.id !== role.id));
+    try {
+      await base44.entities.WorkerRole.delete(role.id);
+      setRoleCatalog((prev) => prev.filter((item) => item.id !== role.id));
+    } catch (err) {
+      setRoleError(getErrorMessage(err, "Failed to delete worker role."));
+    }
   };
 
   const openPhotoPicker = () => {
@@ -258,18 +292,26 @@ export default function Workers() {
     <div className="p-4 md:p-6 space-y-5">
       <PageHeader
         title="Workers"
-        subtitle={`${workers.filter((worker) => worker.status === "active").length} active · Monthly payroll: ${fmt(totalSalary)}`}
+        subtitle={
+          isAdmin
+            ? `${workers.filter((worker) => worker.status === "active").length} active · Monthly payroll: ${fmt(totalSalary)}`
+            : `${workers.filter((worker) => worker.status === "active").length} active workers`
+        }
         actions={
           <>
-            <Button variant="outline" onClick={openRoleManager} size="sm">
-              <Settings2 className="w-4 h-4 mr-1" /> Manage Roles
-            </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={openRoleManager} size="sm">
+                <Settings2 className="w-4 h-4 mr-1" /> Manage Roles
+              </Button>
+            )}
             <Button onClick={openCreate} size="sm">
               <Plus className="w-4 h-4 mr-1" /> Add Worker
             </Button>
           </>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -319,7 +361,7 @@ export default function Workers() {
                       {ghName(worker.greenhouse_id)}
                     </div>
                   )}
-                  {worker.salary > 0 && <div className="text-foreground font-medium">{fmt(worker.salary)}/mo</div>}
+                  {isAdmin && worker.salary > 0 && <div className="text-foreground font-medium">{fmt(worker.salary)}/mo</div>}
                   {worker.hire_date && <div className="text-xs">Hired {worker.hire_date}</div>}
                 </div>
                 <div className="flex gap-2 mt-auto pt-3 border-t border-border">
@@ -425,14 +467,16 @@ export default function Workers() {
             </Select>
           </FormField>
 
-          <FormField label="Monthly Salary (NGN)">
-            <Input
-              type="number"
-              placeholder="80000"
-              value={form.salary ?? ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, salary: e.target.value }))}
-            />
-          </FormField>
+          {isAdmin && (
+            <FormField label="Monthly Salary (NGN)">
+              <Input
+                type="number"
+                placeholder="80000"
+                value={form.salary ?? ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, salary: e.target.value }))}
+              />
+            </FormField>
+          )}
 
           <FormField label="Hire Date">
             <Input type="date" value={form.hire_date || ""} onChange={(e) => setForm((prev) => ({ ...prev, hire_date: e.target.value }))} />
@@ -450,6 +494,7 @@ export default function Workers() {
           <FormField label="Notes">
             <Input placeholder="Optional notes..." value={form.notes || ""} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Cancel
@@ -461,7 +506,7 @@ export default function Workers() {
         </div>
       </Modal>
 
-      <Modal open={showRoleModal} title="Manage Worker Roles" onClose={() => setShowRoleModal(false)}>
+      <Modal open={showRoleModal && isAdmin} title="Manage Worker Roles" onClose={() => setShowRoleModal(false)}>
         <div className="space-y-4">
           {roleError && <div className="text-sm rounded-lg px-3 py-2 bg-danger/10 text-danger">{roleError}</div>}
           <div className="flex gap-2">

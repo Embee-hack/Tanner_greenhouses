@@ -5,13 +5,16 @@ import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Thermometer } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const defaultForm = { greenhouse_id: "", date: new Date().toISOString().slice(0, 10), time: "", temperature_c: "", humidity_pct: "", co2_ppm: "", light_lux: "", notes: "" };
+const ALL_GREENHOUSES_VALUE = "__all__";
 
 export default function Environmental() {
   const [records, setRecords] = useState([]);
@@ -20,17 +23,25 @@ export default function Environmental() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
-  const [selectedGh, setSelectedGh] = useState("");
+  const [selectedGh, setSelectedGh] = useState(ALL_GREENHOUSES_VALUE);
+  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.EnvironmentalLog.list("-date", 300),
-      base44.entities.Greenhouse.list("code"),
-    ]).then(([logs, gh]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [logs, gh] = await Promise.all([
+        base44.entities.EnvironmentalLog.list("-date", 300),
+        base44.entities.Greenhouse.list("code"),
+      ]);
       setRecords(logs);
       setGreenhouses(gh);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load environmental logs."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -39,19 +50,25 @@ export default function Environmental() {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.EnvironmentalLog.create({
-      ...form,
-      temperature_c: form.temperature_c ? parseFloat(form.temperature_c) : null,
-      humidity_pct: form.humidity_pct ? parseFloat(form.humidity_pct) : null,
-      co2_ppm: form.co2_ppm ? parseFloat(form.co2_ppm) : null,
-      light_lux: form.light_lux ? parseFloat(form.light_lux) : null,
-    });
-    setSaving(false);
-    setShowModal(false);
-    load();
+    setError("");
+    try {
+      await base44.entities.EnvironmentalLog.create({
+        ...form,
+        temperature_c: form.temperature_c ? parseFloat(form.temperature_c) : null,
+        humidity_pct: form.humidity_pct ? parseFloat(form.humidity_pct) : null,
+        co2_ppm: form.co2_ppm ? parseFloat(form.co2_ppm) : null,
+        light_lux: form.light_lux ? parseFloat(form.light_lux) : null,
+      });
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save environmental reading."));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const filtered = selectedGh ? records.filter(r => r.greenhouse_id === selectedGh) : records;
+  const filtered = selectedGh !== ALL_GREENHOUSES_VALUE ? records.filter(r => r.greenhouse_id === selectedGh) : records;
 
   // Chart data (last 20 entries for selected gh)
   const chartData = filtered.slice(0, 20).reverse().map(r => ({
@@ -80,16 +97,18 @@ export default function Environmental() {
             <Select value={selectedGh} onValueChange={setSelectedGh}>
               <SelectTrigger className="w-36"><SelectValue placeholder="All GH" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={null}>All</SelectItem>
+                <SelectItem value={ALL_GREENHOUSES_VALUE}>All</SelectItem>
                 {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={() => { setForm(defaultForm); setShowModal(true); }} className="gap-1.5">
+            <Button size="sm" onClick={() => { setForm(defaultForm); setError(""); setShowModal(true); }} className="gap-1.5">
               <Plus className="w-4 h-4" /> Log Reading
             </Button>
           </div>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {chartData.length > 1 && (
         <div className="bg-card rounded-xl border border-border p-5">
@@ -150,6 +169,7 @@ export default function Environmental() {
           <FormField label="Notes">
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional..." />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.date}>

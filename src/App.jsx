@@ -9,6 +9,7 @@ import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import LoginScreen from "@/components/LoginScreen";
 import AccessDenied from "@/components/AccessDenied";
 import PageNotFound from "@/lib/PageNotFound";
+import { isAdminUser } from "@/lib/roles.js";
 import ModuleShell from "@/layouts/ModuleShell.jsx";
 import ModuleSelector from "@/modules/hub/pages/ModuleSelector.jsx";
 import { greenhouseLayout, greenhouseMainPage, greenhousePages } from "@/modules/greenhouse";
@@ -35,17 +36,18 @@ import GoatWorkers from "@/modules/goats/pages/GoatWorkers.jsx";
 import GoatSales from "@/modules/goats/pages/GoatSales.jsx";
 import GoatExpenses from "@/modules/goats/pages/GoatExpenses.jsx";
 import GoatAnalytics from "@/modules/goats/pages/GoatAnalytics.jsx";
+import ActivityLogPage from "@/pages/ActivityLog.jsx";
 
 const GreenhouseLayout = greenhouseLayout;
 const greenhouseMainPageKey = greenhouseMainPage ?? Object.keys(greenhousePages)[0];
-const adminOnlyPages = new Set(["Sales", "Expenses", "Compare", "Workers", "UserManagement"]);
+const adminOnlyGreenhousePages = new Set(["Compare", "UserManagement", "ActivityLog"]);
 
 const GreenhouseLayoutWrapper = ({ children, currentPageName }) =>
   GreenhouseLayout ? <GreenhouseLayout currentPageName={currentPageName}>{children}</GreenhouseLayout> : <>{children}</>;
 
 const GreenhouseRouteElement = ({ pageName, Page, user }) => (
   <GreenhouseLayoutWrapper currentPageName={pageName}>
-    {adminOnlyPages.has(pageName) && user?.role !== "admin" ? <AccessDenied /> : <Page />}
+    {adminOnlyGreenhousePages.has(pageName) && !isAdminUser(user) ? <AccessDenied /> : <Page />}
   </GreenhouseLayoutWrapper>
 );
 
@@ -106,7 +108,7 @@ const AuthenticatedApp = () => {
         <Route path="workers" element={<PoultryWorkers />} />
         <Route path="sales" element={<PoultrySales />} />
         <Route path="expenses" element={<PoultryExpenses />} />
-        <Route path="analytics" element={<PoultryAnalytics />} />
+        <Route path="analytics" element={isAdminUser(user) ? <PoultryAnalytics /> : <AccessDenied />} />
       </Route>
 
       <Route path="/goats" element={<ModuleShell moduleKey="goats" navItems={goatNavItems} />}>
@@ -120,8 +122,17 @@ const AuthenticatedApp = () => {
         <Route path="workers" element={<GoatWorkers />} />
         <Route path="sales" element={<GoatSales />} />
         <Route path="expenses" element={<GoatExpenses />} />
-        <Route path="analytics" element={<GoatAnalytics />} />
+        <Route path="analytics" element={isAdminUser(user) ? <GoatAnalytics /> : <AccessDenied />} />
       </Route>
+
+      <Route
+        path="/ActivityLog"
+        element={<GreenhouseRouteElement pageName="ActivityLog" Page={ActivityLogPage} user={user} />}
+      />
+      <Route
+        path="/greenhouse/ActivityLog"
+        element={<GreenhouseRouteElement pageName="ActivityLog" Page={ActivityLogPage} user={user} />}
+      />
 
       {Object.entries(greenhousePages).map(([pageName, Page]) => (
         <Fragment key={pageName}>

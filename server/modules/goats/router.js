@@ -8,6 +8,31 @@ export const createGoatRouter = ({ prisma, requireAuth, logActivitySafe }) => {
   router.use(requireAuth);
 
   const serialize = (row, dateFields = []) => serializeRecord(row, dateFields);
+  const isAdmin = (user) => String(user?.role || "").toLowerCase() === "admin";
+  const toManagerDashboardData = (data) => ({
+    summary: data.summary,
+    charts: {
+      herd_growth: data.charts.herd_growth,
+      births_by_month: data.charts.births_by_month,
+      weight_trend: data.charts.weight_trend,
+    },
+    analytics: {
+      herd_count_by_sex: data.analytics.herd_count_by_sex,
+      herd_count_by_status: data.analytics.herd_count_by_status,
+      births_by_month: data.analytics.births_by_month,
+      weight_trend: data.analytics.weight_trend,
+      breeding_success_rate: data.analytics.breeding_success_rate,
+      kidding_rate: data.analytics.kidding_rate,
+    },
+    reference: {
+      pens: data.reference.pens,
+      goats: data.reference.goats,
+      breeding_logs: data.reference.breeding_logs,
+      health_logs: data.reference.health_logs,
+      weight_logs: data.reference.weight_logs,
+      feed_logs: data.reference.feed_logs,
+    },
+  });
 
   registerCrudRoutes({
     router,
@@ -128,16 +153,18 @@ export const createGoatRouter = ({ prisma, requireAuth, logActivitySafe }) => {
     logActivitySafe,
   });
 
-  router.get("/dashboard", async (_req, res, next) => {
+  router.get("/dashboard", async (req, res, next) => {
     try {
-      res.json(await getGoatModuleData(prisma));
+      const data = await getGoatModuleData(prisma);
+      res.json(isAdmin(req.user) ? data : toManagerDashboardData(data));
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/analytics", async (_req, res, next) => {
+  router.get("/analytics", async (req, res, next) => {
     try {
+      if (!isAdmin(req.user)) return res.status(403).json({ error: "Admin access required" });
       const data = await getGoatModuleData(prisma);
       res.json({
         summary: data.summary,

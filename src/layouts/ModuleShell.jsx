@@ -3,13 +3,21 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { ChevronRight, Menu, X } from "lucide-react";
 import HeaderControls from "@/components/navigation/HeaderControls.jsx";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import { moduleRegistry, setStoredModuleKey } from "@/lib/modules";
 
 export default function ModuleShell({ moduleKey, navItems, footerCopy }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
   const moduleItem = moduleRegistry[moduleKey];
   const Icon = moduleItem.icon;
+  const isOwner = isAdminUser(user);
+  const visibleNavItems = useMemo(
+    () => navItems.filter((item) => !item.ownerOnly || isOwner),
+    [isOwner, navItems]
+  );
 
   useEffect(() => {
     setStoredModuleKey(moduleKey);
@@ -17,10 +25,10 @@ export default function ModuleShell({ moduleKey, navItems, footerCopy }) {
 
   const currentItem = useMemo(
     () =>
-      [...navItems]
+      [...visibleNavItems]
         .sort((a, b) => b.path.length - a.path.length)
         .find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)),
-    [location.pathname, navItems]
+    [location.pathname, visibleNavItems]
   );
 
   const pageTitle = currentItem?.label || moduleItem.shortLabel;
@@ -46,7 +54,7 @@ export default function ModuleShell({ moduleKey, navItems, footerCopy }) {
           </div>
           <div>
             <div className="font-bold text-sm text-foreground leading-tight">{moduleItem.shortLabel}</div>
-            <div className="text-xs text-muted-foreground">Farm Management Platform</div>
+            <div className="text-xs text-muted-foreground">{isOwner ? "Owner View" : "Farm Manager"}</div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -57,7 +65,7 @@ export default function ModuleShell({ moduleKey, navItems, footerCopy }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -94,7 +102,9 @@ export default function ModuleShell({ moduleKey, navItems, footerCopy }) {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-semibold text-foreground truncate">{pageTitle}</h1>
-            <p className="text-xs text-muted-foreground truncate">{moduleItem.shortLabel} module</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {moduleItem.shortLabel} module{!isOwner ? " · Farm Manager" : ""}
+            </p>
           </div>
           <HeaderControls />
         </header>

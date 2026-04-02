@@ -50,7 +50,7 @@ function SparkBars({ score, color }) {
   );
 }
 
-export default function GreenhouseTile({ greenhouse, metrics }) {
+export default function GreenhouseTile({ greenhouse, metrics, showFinancialMetrics = true }) {
   const { fmt } = useCurrency();
   const score = metrics?.performance_score ?? 0;
   const perf = getPerf(score);
@@ -83,10 +83,18 @@ export default function GreenhouseTile({ greenhouse, metrics }) {
       {/* Metrics grid */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="bg-background/60 rounded-lg p-2">
-          <div className="text-[10px] text-muted-foreground mb-0.5">Profit/Plant</div>
-          <div className={cn("font-bold text-sm", metrics?.profit_per_plant >= 0 ? "text-success" : "text-danger")}>
-            {metrics?.profit_per_plant != null ? fmt(metrics.profit_per_plant, 0) : "—"}
+          <div className="text-[10px] text-muted-foreground mb-0.5">
+            {showFinancialMetrics ? "Profit/Plant" : "Active Plants"}
           </div>
+          {showFinancialMetrics ? (
+            <div className={cn("font-bold text-sm", metrics?.profit_per_plant >= 0 ? "text-success" : "text-danger")}>
+              {metrics?.profit_per_plant != null ? fmt(metrics.profit_per_plant, 0) : "—"}
+            </div>
+          ) : (
+            <div className="font-bold text-sm text-foreground">
+              {metrics?.active_plants?.toLocaleString() ?? "—"}
+            </div>
+          )}
         </div>
         <div className="bg-background/60 rounded-lg p-2">
           <div className="text-[10px] text-muted-foreground mb-0.5">Yield/Plant</div>
@@ -96,18 +104,21 @@ export default function GreenhouseTile({ greenhouse, metrics }) {
         </div>
       </div>
 
-      {/* Plants row */}
-      <div className="flex items-center justify-between text-xs mb-3">
-        <span className="text-muted-foreground">Active Plants</span>
-        <span className="font-semibold text-foreground">{metrics?.active_plants?.toLocaleString() ?? "—"}</span>
-      </div>
+      {showFinancialMetrics && (
+        <div className="flex items-center justify-between text-xs mb-3">
+          <span className="text-muted-foreground">Active Plants</span>
+          <span className="font-semibold text-foreground">{metrics?.active_plants?.toLocaleString() ?? "—"}</span>
+        </div>
+      )}
 
       {/* Spark + trend */}
       <div className="border-t border-border/40 pt-2 mt-1">
-        <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide font-medium">8W Trend</div>
+        <div className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide font-medium">
+          {showFinancialMetrics ? "8W Trend" : "Production Score"}
+        </div>
         <div className="flex items-end justify-between">
           <SparkBars score={score} color={perf.bar} />
-          <TrendIcon className={cn("w-4 h-4", trendColor)} />
+          {showFinancialMetrics ? <TrendIcon className={cn("w-4 h-4", trendColor)} /> : null}
         </div>
       </div>
     </Link>

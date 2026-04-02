@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlertCircle, Info, Bell, X, TrendingDown, Package, Bug, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function generateAlerts(harvests, incidents, expenses, inventoryItems = [], greenhouses = [], cycles = []) {
+function generateAlerts(harvests, incidents, expenses, inventoryItems = [], greenhouses = [], cycles = [], includeFinanceAlerts = true) {
   const alerts = [];
   const now = Date.now();
   const days30 = 30 * 24 * 60 * 60 * 1000;
@@ -98,18 +98,20 @@ function generateAlerts(harvests, incidents, expenses, inventoryItems = [], gree
   }
 
   // ─── MEDIUM: surge in expenses this month ─────────────────────────────────
-  const thisMonth = new Date().toISOString().slice(0, 7);
-  const lastMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7);
-  const thisMonthExp = expenses.filter(e => e.date?.startsWith(thisMonth)).reduce((s, e) => s + (e.amount || 0), 0);
-  const lastMonthExp = expenses.filter(e => e.date?.startsWith(lastMonth)).reduce((s, e) => s + (e.amount || 0), 0);
-  if (lastMonthExp > 0 && thisMonthExp > lastMonthExp * 1.3) {
-    alerts.push({
-      id: "expense-surge",
-      priority: "medium",
-      category: "finance",
-      message: `Expense surge: This month's spending is ${Math.round((thisMonthExp / lastMonthExp - 1) * 100)}% higher than last month`,
-      icon: Zap,
-    });
+  if (includeFinanceAlerts) {
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    const lastMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7);
+    const thisMonthExp = expenses.filter(e => e.date?.startsWith(thisMonth)).reduce((s, e) => s + (e.amount || 0), 0);
+    const lastMonthExp = expenses.filter(e => e.date?.startsWith(lastMonth)).reduce((s, e) => s + (e.amount || 0), 0);
+    if (lastMonthExp > 0 && thisMonthExp > lastMonthExp * 1.3) {
+      alerts.push({
+        id: "expense-surge",
+        priority: "medium",
+        category: "finance",
+        message: `Expense surge: This month's spending is ${Math.round((thisMonthExp / lastMonthExp - 1) * 100)}% higher than last month`,
+        icon: Zap,
+      });
+    }
   }
 
   // ─── INFO: all good ───────────────────────────────────────────────────────
@@ -159,9 +161,17 @@ const PRIORITY_CONFIG = {
   },
 };
 
-export default function AlertsBanner({ harvests = [], incidents = [], expenses = [], inventoryItems = [], greenhouses = [], cycles = [] }) {
+export default function AlertsBanner({
+  harvests = [],
+  incidents = [],
+  expenses = [],
+  inventoryItems = [],
+  greenhouses = [],
+  cycles = [],
+  includeFinanceAlerts = true,
+}) {
   const [dismissed, setDismissed] = useState(new Set());
-  const allAlerts = generateAlerts(harvests, incidents, expenses, inventoryItems, greenhouses, cycles);
+  const allAlerts = generateAlerts(harvests, incidents, expenses, inventoryItems, greenhouses, cycles, includeFinanceAlerts);
   const alerts = allAlerts.filter(a => !dismissed.has(a.id));
 
   const criticalCount = alerts.filter(a => a.priority === "critical").length;

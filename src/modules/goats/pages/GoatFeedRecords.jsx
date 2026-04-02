@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Plus } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { formatDateLabel } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -20,13 +21,20 @@ export default function GoatFeedRecords() {
   const [pens, setPens] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [penRows, feedRows] = await Promise.all([goatsClient.pens.list(), goatsClient.feedLogs.list()]);
-    setPens(penRows);
-    setRecords(feedRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [penRows, feedRows] = await Promise.all([goatsClient.pens.list(), goatsClient.feedLogs.list()]);
+      setPens(penRows);
+      setRecords(feedRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load goat feed records."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -63,6 +71,8 @@ export default function GoatFeedRecords() {
       ]}
       records={records}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: Activity,

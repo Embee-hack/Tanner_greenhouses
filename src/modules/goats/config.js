@@ -23,5 +23,5 @@ export const goatNavItems = [
   { label: "Workers", path: "/goats/workers", icon: Users },
   { label: "Sales", path: "/goats/sales", icon: ShoppingCart },
   { label: "Expenses", path: "/goats/expenses", icon: DollarSign },
-  { label: "Analytics", path: "/goats/analytics", icon: BarChart3 },
+  { label: "Analytics", path: "/goats/analytics", icon: BarChart3, ownerOnly: true },
 ];

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/shared/PageHeader";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
@@ -16,22 +18,33 @@ export default function Compare() {
   const [expenses, setExpenses] = useState([]);
   const [popLogs, setPopLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    Promise.all([
-      base44.entities.Greenhouse.list("code"),
-      base44.entities.HarvestRecord.list("-date", 500),
-      base44.entities.SalesRecord.list("-date", 500),
-      base44.entities.ExpenseRecord.list("-date", 500),
-      base44.entities.PlantPopulationLog.list("-date", 500),
-    ]).then(([gh, ha, sa, ex, po]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [gh, ha, sa, ex, po] = await Promise.all([
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.HarvestRecord.list("-date", 500),
+        base44.entities.SalesRecord.list("-date", 500),
+        base44.entities.ExpenseRecord.list("-date", 500),
+        base44.entities.PlantPopulationLog.list("-date", 500),
+      ]);
       setGreenhouses(gh);
       setHarvests(ha);
       setSales(sa);
       setExpenses(ex);
       setPopLogs(po);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load greenhouse comparison data."));
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const toggleGh = (id) => {
@@ -83,6 +96,8 @@ export default function Compare() {
         title="Greenhouse Comparison"
         subtitle="Select up to 8 greenhouses to compare, or view all"
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {/* Greenhouse selector */}
       <div className="bg-card rounded-xl border border-border p-4">

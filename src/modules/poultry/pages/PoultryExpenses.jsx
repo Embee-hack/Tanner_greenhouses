@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { DollarSign, Plus } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 import { formatDateLabel, normalizeOptionalValue } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -15,16 +18,25 @@ const initialValues = {
 
 export default function PoultryExpenses() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [flocks, setFlocks] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [flockRows, expenseRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.expenses.list()]);
-    setFlocks(flockRows);
-    setRecords(expenseRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [flockRows, expenseRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.expenses.list()]);
+      setFlocks(flockRows);
+      setRecords(expenseRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load poultry expenses."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -64,7 +76,9 @@ export default function PoultryExpenses() {
       ]}
       records={records}
       loading={loading}
-      summaryCards={summaryCards}
+      loadError={loadError}
+      onRetry={load}
+      summaryCards={isAdmin ? summaryCards : []}
       emptyState={{
         icon: DollarSign,
         title: "No poultry expenses yet",

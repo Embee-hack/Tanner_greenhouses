@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Sprout,
   BarChart3,
+  Activity,
   ShoppingCart,
   DollarSign,
   Bug,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { base44 } from "@/api/base44Client";
 import { initNotificationStore } from "@/components/shared/NotificationStore.jsx";
 import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import HeaderControls from "@/components/navigation/HeaderControls.jsx";
 import { setStoredModuleKey } from "@/lib/modules";
 
@@ -60,8 +62,8 @@ const groupedNav = [
     icon: DollarSign,
     defaultOpen: false,
     items: [
-      { label: "Sales", icon: ShoppingCart, page: "Sales", ownerOnly: true },
-      { label: "Expenses", icon: DollarSign, page: "Expenses", ownerOnly: true },
+      { label: "Sales", icon: ShoppingCart, page: "Sales" },
+      { label: "Expenses", icon: DollarSign, page: "Expenses" },
     ],
   },
   {
@@ -70,8 +72,7 @@ const groupedNav = [
     icon: Users,
     defaultOpen: false,
     items: [
-      { label: "Workers", icon: HardHat, page: "Workers", ownerOnly: true },
-      { label: "Users", icon: Users, page: "UserManagement", ownerOnly: true },
+      { label: "Workers", icon: HardHat, page: "Workers" },
     ],
   },
   {
@@ -82,6 +83,16 @@ const groupedNav = [
     items: [
       { label: "Calendar", icon: CalendarDays, page: "FarmCalendar" },
       { label: "Compare", icon: GitCompare, page: "Compare", ownerOnly: true, hideUntilData: true },
+    ],
+  },
+  {
+    key: "admin",
+    label: "Admin",
+    icon: Activity,
+    defaultOpen: false,
+    items: [
+      { label: "Users", icon: Users, page: "UserManagement", ownerOnly: true },
+      { label: "Activity Log", icon: Activity, page: "ActivityLog", ownerOnly: true },
     ],
   },
 ];
@@ -114,24 +125,18 @@ function LayoutInner({ children, currentPageName }) {
   const DashboardIcon = dashboardItem.icon;
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isOwner, setIsOwner] = useState(true);
   const [showCompare, setShowCompare] = useState(false);
   const [footerStats, setFooterStats] = useState(defaultFooterStats);
   const [openSections, setOpenSections] = useState(() =>
     groupedNav.reduce((acc, section) => ({ ...acc, [section.key]: section.defaultOpen }), {})
   );
+  const isOwner = isAdminUser(user);
 
   useEffect(() => {
     setStoredModuleKey("greenhouse");
   }, []);
 
   useEffect(() => {
-    base44.auth
-      .me()
-      .then((user) => {
-        setIsOwner(user?.role === "admin");
-      })
-      .catch(() => setIsOwner(false));
     initNotificationStore();
   }, []);
 

@@ -3,9 +3,11 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Shield, User, Upload } from "lucide-react";
+import { UserPlus, Shield, User, Upload, Eye, EyeOff } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const roleColors = {
   admin: "bg-primary/10 text-primary border-primary/20",
@@ -33,18 +35,31 @@ export default function UserManagement() {
   const [createError, setCreateError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    Promise.all([base44.entities.User.list(), base44.auth.me()]).then(([u, me]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [u, me] = await Promise.all([base44.entities.User.list(), base44.auth.me()]);
       setUsers(u);
       setCurrentUser(me);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load users."));
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const openCreateModal = () => {
     setCreateForm(defaultCreateForm);
     setCreateError("");
+    setShowCreatePassword(false);
     setShowCreateModal(true);
   };
 
@@ -80,11 +95,17 @@ export default function UserManagement() {
     if (!file || !currentUser) return;
 
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.auth.updateMe({ profile_picture: file_url });
-    setCurrentUser((prev) => (prev ? { ...prev, profile_picture: file_url } : null));
-    setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? { ...u, profile_picture: file_url } : u)));
-    setUploading(false);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      await base44.auth.updateMe({ profile_picture: file_url });
+      setCurrentUser((prev) => (prev ? { ...prev, profile_picture: file_url } : null));
+      setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? { ...u, profile_picture: file_url } : u)));
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to update profile picture."));
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -99,6 +120,8 @@ export default function UserManagement() {
           </Button>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -201,12 +224,24 @@ export default function UserManagement() {
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
-              <Input
-                type="password"
-                placeholder="Minimum 8 characters"
-                value={createForm.password}
-                onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
-              />
+              <div className="relative">
+                <Input
+                  type={showCreatePassword ? "text" : "password"}
+                  placeholder="Minimum 8 characters"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                  autoComplete="new-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePassword((v) => !v)}
+                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+                >
+                  {showCreatePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <div>

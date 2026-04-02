@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,11 +32,13 @@ import { Plus, DollarSign, Copy, Pencil, Trash2, MoreHorizontal } from "lucide-r
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { format, parseISO } from "date-fns";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const CATEGORIES = ["labor","fertilizer","pesticide","water","energy","packaging","transport","equipment","seeds","other"];
 const COLORS = ["hsl(152,60%,32%)","hsl(38,95%,52%)","hsl(199,89%,48%)","hsl(280,65%,60%)","hsl(0,72%,51%)","hsl(340,75%,55%)","hsl(45,90%,50%)","hsl(170,60%,40%)","hsl(230,70%,60%)","hsl(90,55%,45%)"];
 
 const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "labor", amount: "", greenhouse_id: "", description: "" };
+const SHARED_GREENHOUSE_VALUE = "__shared__";
 
 const formatExpenseDate = (dateStr) => {
   try { return format(parseISO(String(dateStr)), "d MMM yyyy"); }
@@ -55,6 +60,8 @@ const CATEGORY_COLORS = {
 
 export default function Expenses() {
   const { fmt, symbol } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,16 +74,23 @@ export default function Expenses() {
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.ExpenseRecord.list("-date", 200),
-      base44.entities.Greenhouse.list("code"),
-    ]).then(([ex, gh]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [ex, gh] = await Promise.all([
+        base44.entities.ExpenseRecord.list("-date", 200),
+        base44.entities.Greenhouse.list("code"),
+      ]);
       setRecords(ex);
       setGreenhouses(gh);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load expense records."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -304,7 +318,7 @@ export default function Expenses() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHeader
         title="Expenses"
-        subtitle={`${fmt(totalExpenses)} total`}
+        subtitle={isAdmin ? `${fmt(totalExpenses)} total` : `${records.length} expense record${records.length === 1 ? "" : "s"}`}
         actions={
           <Button size="sm" onClick={openCreate} className="gap-1.5">
             <Plus className="w-4 h-4" /> Add Expense
@@ -312,11 +326,13 @@ export default function Expenses() {
         }
       />
 
+      <ErrorBanner message={loadError} onRetry={load} />
+
       {error && (
         <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div>
       )}
 
-      {pieData.length > 0 && (
+      {isAdmin && pieData.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-5">
           <h3 className="font-semibold text-sm mb-4">Expense Breakdown</h3>
           <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -395,10 +411,13 @@ export default function Expenses() {
               </Select>
             </FormField>
             <FormField label="Greenhouse (optional)">
-              <Select value={form.greenhouse_id} onValueChange={v => setForm(f => ({ ...f, greenhouse_id: v }))}>
+              <Select
+                value={form.greenhouse_id || SHARED_GREENHOUSE_VALUE}
+                onValueChange={(value) => setForm((f) => ({ ...f, greenhouse_id: value === SHARED_GREENHOUSE_VALUE ? "" : value }))}
+              >
                 <SelectTrigger><SelectValue placeholder="Shared expense" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={null}>Shared</SelectItem>
+                  <SelectItem value={SHARED_GREENHOUSE_VALUE}>Shared</SelectItem>
                   {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}
                 </SelectContent>
               </Select>

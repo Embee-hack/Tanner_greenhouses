@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Plus, Warehouse } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 
 const initialValues = {
@@ -16,13 +17,20 @@ export default function PoultryHouses() {
   const [houses, setHouses] = useState([]);
   const [flocks, setFlocks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [houseRows, flockRows] = await Promise.all([poultryClient.houses.list(), poultryClient.flocks.list()]);
-    setHouses(houseRows);
-    setFlocks(flockRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [houseRows, flockRows] = await Promise.all([poultryClient.houses.list(), poultryClient.flocks.list()]);
+      setHouses(houseRows);
+      setFlocks(flockRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load poultry houses."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -57,6 +65,8 @@ export default function PoultryHouses() {
       ]}
       records={houses}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: Warehouse,

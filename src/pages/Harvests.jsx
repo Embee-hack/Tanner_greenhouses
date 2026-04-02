@@ -5,11 +5,13 @@ import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, BarChart3 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const defaultForm = { greenhouse_id: "", cycle_id: "", date: new Date().toISOString().slice(0, 10), kg_harvested: "", grade_a_kg: "", grade_b_kg: "", grade_c_kg: "", notes: "" };
 
@@ -21,18 +23,26 @@ export default function Harvests() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.HarvestRecord.list("-date", 200),
-      base44.entities.Greenhouse.list("code"),
-      base44.entities.CropCycle.list("-planting_date"),
-    ]).then(([ha, gh, cy]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [ha, gh, cy] = await Promise.all([
+        base44.entities.HarvestRecord.list("-date", 200),
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.CropCycle.list("-planting_date"),
+      ]);
       setRecords(ha);
       setGreenhouses(gh);
       setCycles(cy);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load harvest records."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -42,16 +52,22 @@ export default function Harvests() {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.HarvestRecord.create({
-      ...form,
-      kg_harvested: parseFloat(form.kg_harvested) || 0,
-      grade_a_kg: parseFloat(form.grade_a_kg) || 0,
-      grade_b_kg: parseFloat(form.grade_b_kg) || 0,
-      grade_c_kg: parseFloat(form.grade_c_kg) || 0,
-    });
-    setSaving(false);
-    setShowModal(false);
-    load();
+    setError("");
+    try {
+      await base44.entities.HarvestRecord.create({
+        ...form,
+        kg_harvested: parseFloat(form.kg_harvested) || 0,
+        grade_a_kg: parseFloat(form.grade_a_kg) || 0,
+        grade_b_kg: parseFloat(form.grade_b_kg) || 0,
+        grade_c_kg: parseFloat(form.grade_c_kg) || 0,
+      });
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save harvest record."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Chart: weekly totals
@@ -81,11 +97,13 @@ export default function Harvests() {
         title="Harvest Records"
         subtitle={`${totalKg.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg total harvested`}
         actions={
-          <Button size="sm" onClick={() => { setForm(defaultForm); setShowModal(true); }} className="gap-1.5">
+          <Button size="sm" onClick={() => { setForm(defaultForm); setError(""); setShowModal(true); }} className="gap-1.5">
             <Plus className="w-4 h-4" /> Log Harvest
           </Button>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {chartData.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-5">
@@ -149,6 +167,7 @@ export default function Harvests() {
           <FormField label="Notes">
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.kg_harvested || !form.date}>

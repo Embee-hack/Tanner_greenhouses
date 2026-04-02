@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +13,7 @@ import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
   startOfWeek, endOfWeek, isSameMonth, isSameDay, parseISO, isToday
 } from "date-fns";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const EVENT_TYPES = ["planting","harvest","treatment","inspection","maintenance","other"];
 const EVENT_COLORS = {
@@ -32,6 +34,31 @@ const DOT_COLORS = {
 };
 
 const defaultForm = { title: "", date: "", end_date: "", event_type: "other", greenhouse_id: "", description: "" };
+const ALL_GREENHOUSES_VALUE = "__all__";
+
+const parseEventDate = (value) => {
+  if (!value) return null;
+  try {
+    const parsed = parseISO(String(value));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  } catch {
+    return null;
+  }
+};
+
+const getEventRange = (event) => {
+  const start = parseEventDate(event?.date);
+  const end = parseEventDate(event?.end_date || event?.date);
+  if (!start || !end) return null;
+  return start.getTime() <= end.getTime() ? { start, end } : { start: end, end: start };
+};
+
+const formatEventRange = (event) => {
+  const range = getEventRange(event);
+  if (!range) return "Date not set";
+  if (isSameDay(range.start, range.end)) return format(range.start, "MMM d, yyyy");
+  return `${format(range.start, "MMM d")} - ${format(range.end, "MMM d, yyyy")}`;
+};
 
 export default function FarmCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -42,15 +69,21 @@ export default function FarmCalendar() {
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.CalendarEvent.list("-date", 500),
-      base44.entities.Greenhouse.list("code"),
-    ]).then(([ev, gh]) => {
+  const load = async () => {
+    try {
+      const [ev, gh] = await Promise.all([
+        base44.entities.CalendarEvent.list("-date", 500),
+        base44.entities.Greenhouse.list("code"),
+      ]);
       setEvents(ev);
       setGreenhouses(gh);
-    });
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load calendar events."));
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -64,36 +97,60 @@ export default function FarmCalendar() {
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
   const getEventsForDay = (day) =>
-    events.filter(e => e.date && isSameDay(parseISO(e.date), day));
+    events.filter((event) => {
+      const range = getEventRange(event);
+      if (!range) return false;
+      const dayValue = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+      const startValue = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
+      const endValue = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
+      return dayValue >= startValue && dayValue <= endValue;
+    });
 
   const openAdd = (day = null) => {
     setEditEvent(null);
+    setError("");
     setForm({ ...defaultForm, date: day ? format(day, "yyyy-MM-dd") : "" });
     setShowModal(true);
   };
 
   const openEdit = (ev) => {
     setEditEvent(ev);
-    setForm({ ...defaultForm, ...ev });
+    setError("");
+    setForm({ ...defaultForm, ...ev, greenhouse_id: ev.greenhouse_id || "" });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    const data = { ...form, greenhouse_id: form.greenhouse_id || null, end_date: form.end_date || null };
-    if (editEvent) {
-      await base44.entities.CalendarEvent.update(editEvent.id, data);
-    } else {
-      await base44.entities.CalendarEvent.create(data);
+    if (form.end_date && form.end_date < form.date) {
+      setError("End date cannot be earlier than the start date.");
+      return;
     }
-    setSaving(false);
-    setShowModal(false);
-    load();
+
+    setSaving(true);
+    setError("");
+    try {
+      const data = { ...form, greenhouse_id: form.greenhouse_id || null, end_date: form.end_date || null };
+      if (editEvent) {
+        await base44.entities.CalendarEvent.update(editEvent.id, data);
+      } else {
+        await base44.entities.CalendarEvent.create(data);
+      }
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save calendar event."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.CalendarEvent.delete(id);
-    load();
+    try {
+      await base44.entities.CalendarEvent.delete(id);
+      load();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to delete calendar event."));
+    }
   };
 
   const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
@@ -118,6 +175,8 @@ export default function FarmCalendar() {
           </div>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3">
@@ -200,6 +259,7 @@ export default function FarmCalendar() {
                     <div key={ev.id} className={cn("p-3 rounded-lg border text-xs", EVENT_COLORS[ev.event_type] || EVENT_COLORS.other)}>
                       <div className="font-semibold mb-0.5">{ev.title}</div>
                       <div className="capitalize opacity-80">{ev.event_type}{ev.greenhouse_id && ` · ${ghMap[ev.greenhouse_id]?.code}`}</div>
+                      <div className="mt-1 opacity-70">{formatEventRange(ev)}</div>
                       {ev.description && <div className="mt-1 opacity-70">{ev.description}</div>}
                       <div className="flex gap-2 mt-2">
                         <button onClick={() => openEdit(ev)} className="underline">Edit</button>
@@ -240,10 +300,13 @@ export default function FarmCalendar() {
               </Select>
             </FormField>
             <FormField label="Greenhouse">
-              <Select value={form.greenhouse_id} onValueChange={v => setForm(f => ({ ...f, greenhouse_id: v }))}>
+              <Select
+                value={form.greenhouse_id || ALL_GREENHOUSES_VALUE}
+                onValueChange={(value) => setForm((f) => ({ ...f, greenhouse_id: value === ALL_GREENHOUSES_VALUE ? "" : value }))}
+              >
                 <SelectTrigger><SelectValue placeholder="All / N/A" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={null}>All / N/A</SelectItem>
+                  <SelectItem value={ALL_GREENHOUSES_VALUE}>All / N/A</SelectItem>
                   {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -252,6 +315,7 @@ export default function FarmCalendar() {
           <FormField label="Description">
             <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional details" />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.title || !form.date}>

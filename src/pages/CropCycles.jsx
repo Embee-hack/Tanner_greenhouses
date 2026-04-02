@@ -17,6 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const defaultForm = {
   greenhouse_id: "",
@@ -31,16 +32,6 @@ const defaultForm = {
 };
 const defaultCropTypeForm = { name: "" };
 const defaultVarietyForm = { crop_type_id: "", name: "" };
-
-const getErrorMessage = (error, fallback) => {
-  if (error?.data?.error) return String(error.data.error);
-  const message = String(error?.message || "");
-  if (message.toLowerCase().includes("cannot reach api server")) return message;
-  if (message.toLowerCase().includes("failed to fetch")) {
-    return "Cannot reach API server. Make sure backend is running, then try again.";
-  }
-  return message || fallback;
-};
 
 export default function CropCycles() {
   const [cycles, setCycles] = useState([]);

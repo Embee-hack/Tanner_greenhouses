@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Fence, PawPrint, Plus } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 
 const initialValues = {
@@ -16,13 +17,20 @@ export default function GoatPens() {
   const [pens, setPens] = useState([]);
   const [goats, setGoats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [penRows, goatRows] = await Promise.all([goatsClient.pens.list(), goatsClient.registry.list()]);
-    setPens(penRows);
-    setGoats(goatRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [penRows, goatRows] = await Promise.all([goatsClient.pens.list(), goatsClient.registry.list()]);
+      setPens(penRows);
+      setGoats(goatRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load goat pens."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -57,6 +65,8 @@ export default function GoatPens() {
       ]}
       records={pens}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: Fence,

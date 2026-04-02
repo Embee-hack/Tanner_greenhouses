@@ -3,6 +3,7 @@ import { Copy, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import FormField from "@/components/shared/FormField";
 import Modal from "@/components/shared/Modal";
 import StatCard from "@/components/dashboard/StatCard";
@@ -89,6 +90,8 @@ export default function RecordManagerPage({
   columns,
   records,
   loading,
+  loadError = "",
+  onRetry,
   summaryCards = [],
   emptyState,
   initialValues,
@@ -335,6 +338,8 @@ export default function RecordManagerPage({
           </Button>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={onRetry} />
 
       {summaryCards.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

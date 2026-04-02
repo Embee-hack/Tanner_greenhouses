@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/shared/PageHeader";
-
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const statusConfig = {
   active: { label: "Active", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", border: "border-emerald-200" },
@@ -113,22 +114,37 @@ export default function Greenhouses() {
   const [blockForm, setBlockForm] = useState(defaultBlockForm);
   const [saving, setSaving] = useState(false);
   const [savingBlock, setSavingBlock] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
+  const [blockError, setBlockError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.Greenhouse.list("code"),
-      base44.entities.Block.list("name"),
-    ]).then(([gh, bl]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [gh, bl] = await Promise.all([
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.Block.list("name"),
+      ]);
       setGreenhouses(gh);
       setBlocks(bl);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load greenhouses."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
 
-  const openAdd = () => { setForm(defaultForm); setEditItem(null); setShowModal(true); };
+  const openAdd = () => {
+    setError("");
+    setForm(defaultForm);
+    setEditItem(null);
+    setShowModal(true);
+  };
   const openEdit = (row) => {
+    setError("");
     setForm({
       ...defaultForm,
       ...row,
@@ -142,21 +158,27 @@ export default function Greenhouses() {
 
   const handleSave = async () => {
     setSaving(true);
-    const data = {
-      ...form,
-      name: String(form.name || "").trim() || null,
-      block_id: form.block_id || null,
-      area: form.area ? parseFloat(form.area) : null,
-      capacity_plants: form.capacity_plants ? parseInt(form.capacity_plants) : null,
-    };
-    if (editItem) {
-      await base44.entities.Greenhouse.update(editItem.id, data);
-    } else {
-      await base44.entities.Greenhouse.create(data);
+    setError("");
+    try {
+      const data = {
+        ...form,
+        name: String(form.name || "").trim() || null,
+        block_id: form.block_id || null,
+        area: form.area ? parseFloat(form.area) : null,
+        capacity_plants: form.capacity_plants ? parseInt(form.capacity_plants) : null,
+      };
+      if (editItem) {
+        await base44.entities.Greenhouse.update(editItem.id, data);
+      } else {
+        await base44.entities.Greenhouse.create(data);
+      }
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save greenhouse."));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setShowModal(false);
-    load();
   };
 
   const handleCreateBlock = async () => {
@@ -164,15 +186,21 @@ export default function Greenhouses() {
     const blockName = String(blockForm.name || "").trim();
     if (!blockCode && !blockName) return;
     setSavingBlock(true);
-    await base44.entities.Block.create({
-      code: blockCode || null,
-      name: blockName || blockCode || "Unnamed Block",
-      notes: String(blockForm.notes || "").trim() || null,
-      status: "active",
-    });
-    setBlockForm(defaultBlockForm);
-    setSavingBlock(false);
-    load();
+    setBlockError("");
+    try {
+      await base44.entities.Block.create({
+        code: blockCode || null,
+        name: blockName || blockCode || "Unnamed Block",
+        notes: String(blockForm.notes || "").trim() || null,
+        status: "active",
+      });
+      setBlockForm(defaultBlockForm);
+      load();
+    } catch (err) {
+      setBlockError(getErrorMessage(err, "Failed to create block."));
+    } finally {
+      setSavingBlock(false);
+    }
   };
 
   const formatBlockLabel = (block) => {
@@ -193,7 +221,7 @@ export default function Greenhouses() {
         subtitle={`${greenhouses.length} total · ${activeCount} active`}
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={() => setShowBlockModal(true)} className="gap-1.5">
+            <Button size="sm" variant="outline" onClick={() => { setBlockError(""); setShowBlockModal(true); }} className="gap-1.5">
               <Layers className="w-4 h-4" /> Manage Blocks
             </Button>
             <Button size="sm" onClick={openAdd} className="gap-1.5">
@@ -202,6 +230,8 @@ export default function Greenhouses() {
           </>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} className="mb-6" />
 
       {!loading && greenhouses.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -283,6 +313,7 @@ export default function Greenhouses() {
           <FormField label="Notes">
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.code}>
@@ -294,6 +325,7 @@ export default function Greenhouses() {
 
       <Modal open={showBlockModal} onClose={() => setShowBlockModal(false)} title="Manage Blocks">
         <div className="space-y-4">
+          {blockError ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{blockError}</div> : null}
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Block Code">
               <Input

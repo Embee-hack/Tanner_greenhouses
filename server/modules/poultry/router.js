@@ -8,6 +8,43 @@ export const createPoultryRouter = ({ prisma, requireAuth, logActivitySafe }) =>
   router.use(requireAuth);
 
   const serialize = (row, dateFields = []) => serializeRecord(row, dateFields);
+  const isAdmin = (user) => String(user?.role || "").toLowerCase() === "admin";
+  const toManagerDashboardData = (data) => ({
+    summary: {
+      active_flocks: data.summary.active_flocks,
+      total_live_birds: data.summary.total_live_birds,
+      eggs_today: data.summary.eggs_today,
+      mortality_today: data.summary.mortality_today,
+      feed_consumed_today: data.summary.feed_consumed_today,
+      active_houses: data.summary.active_houses,
+      recent_health_alerts: data.summary.recent_health_alerts,
+    },
+    charts: {
+      eggs_trend: data.charts.eggs_trend,
+      mortality_trend: data.charts.mortality_trend,
+      feed_trend: data.charts.feed_trend,
+      egg_output_by_flock: data.charts.egg_output_by_flock,
+    },
+    analytics: {
+      mortality_rate: data.analytics.mortality_rate,
+      eggs_per_bird: data.analytics.eggs_per_bird,
+      feed_per_bird: data.analytics.feed_per_bird,
+      flock_performance: (data.analytics.flock_performance || []).map((row) => ({
+        flock_id: row.flock_id,
+        flock_code: row.flock_code,
+        eggs: row.eggs,
+        mortality: row.mortality,
+        current_live_birds: row.current_live_birds,
+      })),
+    },
+    reference: {
+      houses: data.reference.houses,
+      flocks: data.reference.flocks,
+      daily_logs: data.reference.daily_logs,
+      feed_logs: data.reference.feed_logs,
+      health_logs: data.reference.health_logs,
+    },
+  });
 
   registerCrudRoutes({
     router,
@@ -106,16 +143,18 @@ export const createPoultryRouter = ({ prisma, requireAuth, logActivitySafe }) =>
     logActivitySafe,
   });
 
-  router.get("/dashboard", async (_req, res, next) => {
+  router.get("/dashboard", async (req, res, next) => {
     try {
-      res.json(await getPoultryModuleData(prisma));
+      const data = await getPoultryModuleData(prisma);
+      res.json(isAdmin(req.user) ? data : toManagerDashboardData(data));
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/analytics", async (_req, res, next) => {
+  router.get("/analytics", async (req, res, next) => {
     try {
+      if (!isAdmin(req.user)) return res.status(403).json({ error: "Admin access required" });
       const data = await getPoultryModuleData(prisma);
       res.json({
         summary: data.summary,

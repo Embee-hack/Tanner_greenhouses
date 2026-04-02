@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { DollarSign, Plus } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { formatDateLabel, normalizeOptionalValue } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -16,22 +19,31 @@ const initialValues = {
 
 export default function GoatExpenses() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [goats, setGoats] = useState([]);
   const [pens, setPens] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [goatRows, penRows, expenseRows] = await Promise.all([
-      goatsClient.registry.list(),
-      goatsClient.pens.list(),
-      goatsClient.expenses.list(),
-    ]);
-    setGoats(goatRows);
-    setPens(penRows);
-    setRecords(expenseRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [goatRows, penRows, expenseRows] = await Promise.all([
+        goatsClient.registry.list(),
+        goatsClient.pens.list(),
+        goatsClient.expenses.list(),
+      ]);
+      setGoats(goatRows);
+      setPens(penRows);
+      setRecords(expenseRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load goat expenses."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -76,7 +88,9 @@ export default function GoatExpenses() {
       ]}
       records={records}
       loading={loading}
-      summaryCards={summaryCards}
+      loadError={loadError}
+      onRetry={load}
+      summaryCards={isAdmin ? summaryCards : []}
       emptyState={{
         icon: DollarSign,
         title: "No goat expenses yet",

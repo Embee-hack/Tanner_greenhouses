@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,6 +32,7 @@ import { Plus, ShoppingCart, Copy, Pencil, Trash2, MoreHorizontal } from "lucide
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { format, parseISO } from "date-fns";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const formatSaleDate = (dateStr) => {
   try {
@@ -39,6 +43,7 @@ const formatSaleDate = (dateStr) => {
 };
 
 const PAGE_SIZE = 20;
+const SHARED_GREENHOUSE_VALUE = "__shared__";
 
 const defaultForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -125,6 +130,8 @@ const buildItemColorMap = (labels) => {
 
 export default function Sales() {
   const { fmt, symbol } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [cropTypes, setCropTypes] = useState([]);
@@ -139,25 +146,32 @@ export default function Sales() {
   const [deleteDialog, setDeleteDialog] = useState(null); // { mode: "single" | "bulk", ids: [] }
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [productFilter, setProductFilter] = useState("__all__");
   const [sortBy, setSortBy] = useState("month_desc");
   const [chartMetric, setChartMetric] = useState("kg");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const load = () => {
-    Promise.all([
-      base44.entities.SalesRecord.list("-date", 400),
-      base44.entities.Greenhouse.list("code"),
-      base44.entities.CropType.list("name"),
-      base44.entities.CropVariety.list("name"),
-    ]).then(([sa, gh, ct, cv]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [sa, gh, ct, cv] = await Promise.all([
+        base44.entities.SalesRecord.list("-date", 400),
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.CropType.list("name"),
+        base44.entities.CropVariety.list("name"),
+      ]);
       setRecords(sa);
       setGreenhouses(gh);
       setCropTypes(ct);
       setVarieties(cv);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load sales records."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -632,9 +646,13 @@ export default function Sales() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHeader
         title="Sales Records"
-        subtitle={filtersActive
-          ? `${fmt(filteredRevenue)} filtered · ${sortedRecords.length} records`
-          : `${fmt(totalRevenue)} total · avg ${fmt(avgPrice, 2)}/kg`}
+        subtitle={
+          isAdmin
+            ? filtersActive
+              ? `${fmt(filteredRevenue)} filtered · ${sortedRecords.length} records`
+              : `${fmt(totalRevenue)} total · avg ${fmt(avgPrice, 2)}/kg`
+            : `${sortedRecords.length} sales record${sortedRecords.length === 1 ? "" : "s"}`
+        }
         actions={
           <Button size="sm" onClick={openCreate} className="gap-1.5">
             <Plus className="w-4 h-4" /> Record Sale
@@ -642,13 +660,15 @@ export default function Sales() {
         }
       />
 
+      <ErrorBanner message={loadError} onRetry={load} />
+
       {error && (
         <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">
           {error}
         </div>
       )}
 
-      {monthlyItemChart.length > 0 && itemSeries.length > 0 && (
+      {isAdmin && monthlyItemChart.length > 0 && itemSeries.length > 0 && (
         <div className="bg-card rounded-2xl border border-border p-5 md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div>
@@ -787,7 +807,7 @@ export default function Sales() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${isAdmin ? "md:grid-cols-4" : ""}`}>
           <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
             <div className="text-xs text-muted-foreground">Records</div>
             <div className="text-lg font-semibold">{sortedRecords.length}</div>
@@ -796,14 +816,18 @@ export default function Sales() {
             <div className="text-xs text-muted-foreground">Total Sold</div>
             <div className="text-lg font-semibold">{filteredKg.toFixed(1)} kg</div>
           </div>
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Revenue</div>
-            <div className="text-lg font-semibold">{fmt(filteredRevenue, 2)}</div>
-          </div>
-          <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
-            <div className="text-xs text-muted-foreground">Avg Price</div>
-            <div className="text-lg font-semibold">{fmt(filteredAvgPrice, 2)}/kg</div>
-          </div>
+          {isAdmin && (
+            <>
+              <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+                <div className="text-xs text-muted-foreground">Revenue</div>
+                <div className="text-lg font-semibold">{fmt(filteredRevenue, 2)}</div>
+              </div>
+              <div className="rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+                <div className="text-xs text-muted-foreground">Avg Price</div>
+                <div className="text-lg font-semibold">{fmt(filteredAvgPrice, 2)}/kg</div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -900,10 +924,13 @@ export default function Sales() {
             </FormField>
           </div>
           <FormField label="Greenhouse (optional)">
-            <Select value={form.greenhouse_id} onValueChange={v => setForm(f => ({ ...f, greenhouse_id: v }))}>
+            <Select
+              value={form.greenhouse_id || SHARED_GREENHOUSE_VALUE}
+              onValueChange={(value) => setForm((f) => ({ ...f, greenhouse_id: value === SHARED_GREENHOUSE_VALUE ? "" : value }))}
+            >
               <SelectTrigger><SelectValue placeholder="All / shared" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={null}>All / shared</SelectItem>
+                <SelectItem value={SHARED_GREENHOUSE_VALUE}>All / shared</SelectItem>
                 {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code} — {g.name}</SelectItem>)}
               </SelectContent>
             </Select>

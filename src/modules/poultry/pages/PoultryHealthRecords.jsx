@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { HeartPulse, Plus } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 import { formatDateLabel } from "@/modules/shared/formatters.js";
 
@@ -20,13 +21,20 @@ export default function PoultryHealthRecords() {
   const [flocks, setFlocks] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [flockRows, healthRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.healthLogs.list()]);
-    setFlocks(flockRows);
-    setRecords(healthRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [flockRows, healthRows] = await Promise.all([poultryClient.flocks.list(), poultryClient.healthLogs.list()]);
+      setFlocks(flockRows);
+      setRecords(healthRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load poultry health records."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -64,6 +72,8 @@ export default function PoultryHealthRecords() {
       ]}
       records={records}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: HeartPulse,

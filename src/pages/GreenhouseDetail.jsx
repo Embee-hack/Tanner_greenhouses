@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import { useAuth } from "@/lib/AuthContext";
+import { getErrorMessage } from "@/lib/errors.js";
+import { isAdminUser } from "@/lib/roles.js";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
   ArrowLeft, Sprout, TrendingUp, DollarSign, Package,
-  Bug, Leaf, BarChart2, AlertTriangle
+  Bug, Leaf, BarChart2, AlertTriangle, FlaskConical
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from "recharts";
 import { cn } from "@/lib/utils";
@@ -35,6 +39,8 @@ function StatBox({ label, value, icon: Icon, color }) {
 
 export default function GreenhouseDetail() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id");
 
@@ -47,19 +53,22 @@ export default function GreenhouseDetail() {
   const [treatments, setTreatments] = useState([]);
   const [popLogs, setPopLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
+  const load = async () => {
     if (!id) return;
-    Promise.all([
-      base44.entities.Greenhouse.filter({ id }),
-      base44.entities.CropCycle.filter({ greenhouse_id: id }),
-      base44.entities.HarvestRecord.filter({ greenhouse_id: id }),
-      base44.entities.SalesRecord.filter({ greenhouse_id: id }),
-      base44.entities.ExpenseRecord.filter({ greenhouse_id: id }),
-      base44.entities.Incident.filter({ greenhouse_id: id }),
-      base44.entities.Treatment.filter({ greenhouse_id: id }),
-      base44.entities.PlantPopulationLog.filter({ greenhouse_id: id }),
-    ]).then(([ghRes, cy, ha, sa, ex, inc, tr, po]) => {
+    try {
+      setLoading(true);
+      const [ghRes, cy, ha, sa, ex, inc, tr, po] = await Promise.all([
+        base44.entities.Greenhouse.filter({ id }),
+        base44.entities.CropCycle.filter({ greenhouse_id: id }),
+        base44.entities.HarvestRecord.filter({ greenhouse_id: id }),
+        isAdmin ? base44.entities.SalesRecord.filter({ greenhouse_id: id }) : Promise.resolve([]),
+        isAdmin ? base44.entities.ExpenseRecord.filter({ greenhouse_id: id }) : Promise.resolve([]),
+        base44.entities.Incident.filter({ greenhouse_id: id }),
+        base44.entities.Treatment.filter({ greenhouse_id: id }),
+        base44.entities.PlantPopulationLog.filter({ greenhouse_id: id }),
+      ]);
       setGh(ghRes[0]);
       setCycles(cy);
       setHarvests(ha);
@@ -68,9 +77,17 @@ export default function GreenhouseDetail() {
       setIncidents(inc);
       setTreatments(tr);
       setPopLogs(po);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load greenhouse details."));
+    } finally {
       setLoading(false);
-    });
-  }, [id]);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [id, isAdmin]);
 
   if (loading) return (
     <div className="p-6 space-y-4">
@@ -79,7 +96,10 @@ export default function GreenhouseDetail() {
   );
 
   if (!gh) return (
-    <div className="p-6 text-center text-muted-foreground">Greenhouse not found.</div>
+    <div className="p-6 space-y-4">
+      <ErrorBanner message={loadError} onRetry={load} />
+      <div className="text-center text-muted-foreground">Greenhouse not found.</div>
+    </div>
   );
 
   const greenhouseName = gh.name || gh.code || "Unnamed Greenhouse";
@@ -93,6 +113,14 @@ export default function GreenhouseDetail() {
   const activePlants = latestPop?.active_plants || activeCycle?.plants_planted || 0;
   const yieldPerPlant = activePlants > 0 ? (totalKg / activePlants).toFixed(2) : null;
   const openIncidents = incidents.filter(i => i.status === "open" || i.status === "treated");
+  const populationChart = popLogs
+    .slice()
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(-8)
+    .map((log) => ({
+      date: log.date,
+      active_plants: log.active_plants || 0,
+    }));
 
   // Monthly harvest chart
   const harvestByMonth = {};
@@ -119,6 +147,8 @@ export default function GreenhouseDetail() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+      <ErrorBanner message={loadError} onRetry={load} />
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link to={createPageUrl("Greenhouses")} className="p-2 rounded-lg border border-border hover:bg-muted transition-colors">
@@ -136,12 +166,25 @@ export default function GreenhouseDetail() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatBox label="Total Revenue" value={fmt(totalRevenue)} icon={DollarSign} color="text-emerald-600" />
-        <StatBox label="Total Expenses" value={fmt(totalExpense)} icon={TrendingUp} color="text-amber-600" />
-        <StatBox label="Net Profit" value={fmt(totalProfit)} icon={TrendingUp} color={totalProfit >= 0 ? "text-emerald-600" : "text-red-600"} />
-        <StatBox label="Total Harvest" value={`${totalKg.toLocaleString()} kg`} icon={Package} color="text-primary" />
-        <StatBox label="Active Plants" value={activePlants > 0 ? activePlants.toLocaleString() : "—"} icon={Sprout} color="text-green-600" />
-        <StatBox label="Yield/Plant" value={yieldPerPlant ? `${yieldPerPlant} kg` : "—"} icon={BarChart2} color="text-blue-600" />
+        {isAdmin ? (
+          <>
+            <StatBox label="Total Revenue" value={fmt(totalRevenue)} icon={DollarSign} color="text-emerald-600" />
+            <StatBox label="Total Expenses" value={fmt(totalExpense)} icon={TrendingUp} color="text-amber-600" />
+            <StatBox label="Net Profit" value={fmt(totalProfit)} icon={TrendingUp} color={totalProfit >= 0 ? "text-emerald-600" : "text-red-600"} />
+            <StatBox label="Total Harvest" value={`${totalKg.toLocaleString()} kg`} icon={Package} color="text-primary" />
+            <StatBox label="Active Plants" value={activePlants > 0 ? activePlants.toLocaleString() : "—"} icon={Sprout} color="text-green-600" />
+            <StatBox label="Yield/Plant" value={yieldPerPlant ? `${yieldPerPlant} kg` : "—"} icon={BarChart2} color="text-blue-600" />
+          </>
+        ) : (
+          <>
+            <StatBox label="Total Harvest" value={`${totalKg.toLocaleString()} kg`} icon={Package} color="text-primary" />
+            <StatBox label="Active Plants" value={activePlants > 0 ? activePlants.toLocaleString() : "—"} icon={Sprout} color="text-green-600" />
+            <StatBox label="Yield/Plant" value={yieldPerPlant ? `${yieldPerPlant} kg` : "—"} icon={BarChart2} color="text-blue-600" />
+            <StatBox label="Crop Cycles" value={cycles.length} icon={Leaf} color="text-primary" />
+            <StatBox label="Open Incidents" value={openIncidents.length} icon={AlertTriangle} color={openIncidents.length > 0 ? "text-amber-600" : "text-emerald-600"} />
+            <StatBox label="Treatments" value={treatments.length} icon={FlaskConical} color="text-violet-600" />
+          </>
+        )}
       </div>
 
       {/* Open incidents alert */}
@@ -173,18 +216,36 @@ export default function GreenhouseDetail() {
         </div>
 
         <div className="bg-card rounded-xl border border-border p-5">
-          <h3 className="font-semibold text-sm mb-4">Monthly Revenue</h3>
-          {revenueChart.length > 0 ? (
+          <h3 className="font-semibold text-sm mb-4">{isAdmin ? "Monthly Revenue" : "Active Plant Trend"}</h3>
+          {(isAdmin ? revenueChart.length > 0 : populationChart.length > 0) ? (
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={revenueChart} margin={{ top: 4, right: 8, left: 20, bottom: 20 }}>
+              <LineChart data={isAdmin ? revenueChart : populationChart} margin={{ top: 4, right: 8, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} label={{ value: "Month", position: "insideBottom", offset: -10, style: { fontSize: 10, fill: "hsl(150,10%,45%)" } }} />
-                <YAxis tick={{ fontSize: 10 }} width={70} axisLine={false} tickLine={false} tickFormatter={v => fmt(v, 0)} label={{ value: "Revenue (₦)", angle: -90, position: "insideLeft", offset: 10, dx: -10, style: { fontSize: 10, fill: "hsl(150,10%,45%)" } }} />
-                <Tooltip formatter={v => [fmt(v), "Revenue"]} />
-                <Line type="monotone" dataKey="revenue" stroke="hsl(38,95%,52%)" strokeWidth={2.5} dot={{ r: 3 }} />
+                <XAxis dataKey={isAdmin ? "month" : "date"} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} label={{ value: "Month", position: "insideBottom", offset: -10, style: { fontSize: 10, fill: "hsl(150,10%,45%)" } }} />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  width={70}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(value) => (isAdmin ? fmt(value, 0) : value)}
+                  label={{
+                    value: isAdmin ? "Revenue (₦)" : "Active plants",
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: 10,
+                    dx: -10,
+                    style: { fontSize: 10, fill: "hsl(150,10%,45%)" },
+                  }}
+                />
+                <Tooltip formatter={(value) => [isAdmin ? fmt(value) : value, isAdmin ? "Revenue" : "Active Plants"]} />
+                <Line type="monotone" dataKey={isAdmin ? "revenue" : "active_plants"} stroke="hsl(38,95%,52%)" strokeWidth={2.5} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
-          ) : <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">No sales data</div>}
+          ) : (
+            <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">
+              {isAdmin ? "No sales data" : "No plant population data"}
+            </div>
+          )}
         </div>
       </div>
 
@@ -249,42 +310,43 @@ export default function GreenhouseDetail() {
         </div>
       </div>
 
-      {/* Recent Sales & Expenses */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="px-5 py-3 border-b border-border"><h3 className="font-semibold text-sm">Recent Sales</h3></div>
-          {sales.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">No sales recorded</div> : (
-            <div className="divide-y divide-border">
-              {sales.slice().sort((a, b) => b.date?.localeCompare(a.date)).slice(0, 8).map(s => (
-                <div key={s.id} className="px-5 py-2.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{s.buyer}</div>
-                    <div className="text-xs text-muted-foreground">{s.date} · {s.kg_sold} kg</div>
+      {isAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="px-5 py-3 border-b border-border"><h3 className="font-semibold text-sm">Recent Sales</h3></div>
+            {sales.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">No sales recorded</div> : (
+              <div className="divide-y divide-border">
+                {sales.slice().sort((a, b) => b.date?.localeCompare(a.date)).slice(0, 8).map(s => (
+                  <div key={s.id} className="px-5 py-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">{s.buyer}</div>
+                      <div className="text-xs text-muted-foreground">{s.date} · {s.kg_sold} kg</div>
+                    </div>
+                    <span className="text-sm font-semibold text-emerald-600">{fmt(s.revenue || s.kg_sold * s.price_per_kg)}</span>
                   </div>
-                  <span className="text-sm font-semibold text-emerald-600">{fmt(s.revenue || s.kg_sold * s.price_per_kg)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="px-5 py-3 border-b border-border"><h3 className="font-semibold text-sm">Recent Expenses</h3></div>
-          {expenses.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">No expenses recorded</div> : (
-            <div className="divide-y divide-border">
-              {expenses.slice().sort((a, b) => b.date?.localeCompare(a.date)).slice(0, 8).map(e => (
-                <div key={e.id} className="px-5 py-2.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium capitalize">{e.category?.replace(/_/g, " ")}</div>
-                    <div className="text-xs text-muted-foreground">{e.date} {e.description ? `· ${e.description}` : ""}</div>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="px-5 py-3 border-b border-border"><h3 className="font-semibold text-sm">Recent Expenses</h3></div>
+            {expenses.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">No expenses recorded</div> : (
+              <div className="divide-y divide-border">
+                {expenses.slice().sort((a, b) => b.date?.localeCompare(a.date)).slice(0, 8).map(e => (
+                  <div key={e.id} className="px-5 py-2.5 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium capitalize">{e.category?.replace(/_/g, " ")}</div>
+                      <div className="text-xs text-muted-foreground">{e.date} {e.description ? `· ${e.description}` : ""}</div>
+                    </div>
+                    <span className="text-sm font-semibold text-amber-600">{fmt(e.amount)}</span>
                   </div>
-                  <span className="text-sm font-semibold text-amber-600">{fmt(e.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Greenhouse Info */}
       <div className="bg-card rounded-xl border border-border p-5">

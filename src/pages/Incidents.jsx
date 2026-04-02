@@ -6,11 +6,13 @@ import StatusBadge from "@/components/shared/StatusBadge";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Bug } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const TYPES = ["pest","disease","environmental","structural","other"];
 const SEVERITIES = ["low","medium","high","critical"];
@@ -24,18 +26,26 @@ export default function Incidents() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.Incident.list("-date", 200),
-      base44.entities.Greenhouse.list("code"),
-      base44.entities.CropCycle.filter({ status: "active" }),
-    ]).then(([inc, gh, cy]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [inc, gh, cy] = await Promise.all([
+        base44.entities.Incident.list("-date", 200),
+        base44.entities.Greenhouse.list("code"),
+        base44.entities.CropCycle.filter({ status: "active" }),
+      ]);
       setRecords(inc);
       setGreenhouses(gh);
       setCycles(cy);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load incidents."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -45,19 +55,29 @@ export default function Incidents() {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.Incident.create({
-      ...form,
-      affected_plants: form.affected_plants ? parseInt(form.affected_plants) : null,
-      cycle_id: form.cycle_id || null,
-    });
-    setSaving(false);
-    setShowModal(false);
-    load();
+    setError("");
+    try {
+      await base44.entities.Incident.create({
+        ...form,
+        affected_plants: form.affected_plants ? parseInt(form.affected_plants) : null,
+        cycle_id: form.cycle_id || null,
+      });
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save incident."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateStatus = async (incident, status) => {
-    await base44.entities.Incident.update(incident.id, { status });
-    load();
+    try {
+      await base44.entities.Incident.update(incident.id, { status });
+      load();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to update incident status."));
+    }
   };
 
   const columns = [
@@ -85,11 +105,13 @@ export default function Incidents() {
         title="Pest & Disease Incidents"
         subtitle={`${records.filter(r => r.status === "open").length} open incidents`}
         actions={
-          <Button size="sm" onClick={() => { setForm(defaultForm); setShowModal(true); }} className="gap-1.5">
+          <Button size="sm" onClick={() => { setForm(defaultForm); setError(""); setShowModal(true); }} className="gap-1.5">
             <Plus className="w-4 h-4" /> Report Incident
           </Button>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {!loading && records.length === 0 ? (
         <EmptyState icon={Bug} title="No incidents reported" description="Report pest or disease incidents." action={<Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4 mr-1" />Report Incident</Button>} />
@@ -135,6 +157,7 @@ export default function Incidents() {
           <FormField label="Description">
             <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the incident..." className="h-20 resize-none" />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.incident_type}>

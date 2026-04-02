@@ -50,9 +50,6 @@ const EVENT_REMINDER_TIMEZONE = String(
 ).trim();
 
 const FARM_MANAGER_BLOCKED_WRITE_ENTITIES = new Set([
-  "SalesRecord",
-  "ExpenseRecord",
-  "Worker",
   "WorkerRole",
   "User",
 ]);
@@ -64,6 +61,7 @@ const isAdmin = (user) => normalizeUserRole(user?.role) === ROLE_ADMIN;
 
 const canReadEntity = (user, entity) => {
   if (entity === "User") return isAdmin(user);
+  if (entity === ACTIVITY_LOG_ENTITY) return isAdmin(user);
   if (entity === REMINDER_LOG_ENTITY) return isAdmin(user);
   return true;
 };
@@ -71,6 +69,29 @@ const canReadEntity = (user, entity) => {
 const canWriteEntity = (user, entity) => {
   if (isAdmin(user)) return true;
   return !FARM_MANAGER_BLOCKED_WRITE_ENTITIES.has(entity);
+};
+
+const sanitizeEntityDataForUser = (user, entity, data) => {
+  if (!isObject(data)) return data;
+
+  if (!isAdmin(user) && entity === "Worker") {
+    const { salary, ...safeData } = data;
+    return safeData;
+  }
+
+  return data;
+};
+
+const sanitizeEntityInputForUser = (user, entity, data) => {
+  if (!isObject(data)) return {};
+
+  const input = { ...data };
+
+  if (!isAdmin(user) && entity === "Worker") {
+    delete input.salary;
+  }
+
+  return input;
 };
 
 const sseClients = new Set();
@@ -220,7 +241,12 @@ const sendSse = (res, data) => {
 
 const broadcastEntityEvent = (event) => {
   for (const client of sseClients) {
-    sendSse(client.res, event);
+    if (!canReadEntity(client.user, event.entity)) continue;
+
+    sendSse(client.res, {
+      ...event,
+      data: sanitizeEntityDataForUser(client.user, event.entity, event.data),
+    });
   }
 };
 
@@ -835,6 +861,7 @@ app.use(
   createPoultryRouter({
     prisma,
     requireAuth,
+    requireAdmin,
     logActivitySafe,
   })
 );
@@ -844,6 +871,7 @@ app.use(
   createGoatRouter({
     prisma,
     requireAuth,
+    requireAdmin,
     logActivitySafe,
   })
 );
@@ -864,7 +892,7 @@ app.get("/api/entities/:entity", requireAuth, async (req, res) => {
   }
 
   const rows = await prisma.entityRecord.findMany({ where: { entity } });
-  const items = rows.map(toEntityOutput);
+  const items = rows.map((row) => sanitizeEntityDataForUser(req.user, entity, toEntityOutput(row)));
   const sorted = sortItems(items, sort);
   res.json(limit ? sorted.slice(0, limit) : sorted);
 });
@@ -885,7 +913,7 @@ app.get("/api/entities/:entity/filter", requireAuth, async (req, res) => {
   }
 
   const rows = await prisma.entityRecord.findMany({ where: { entity } });
-  const items = rows.map(toEntityOutput);
+  const items = rows.map((row) => sanitizeEntityDataForUser(req.user, entity, toEntityOutput(row)));
   res.json(items.filter((item) => matchesFilter(item, filters)));
 });
 
@@ -932,7 +960,7 @@ app.post("/api/entities/:entity", requireAuth, async (req, res) => {
     return res.status(201).json(payload);
   }
 
-  const input = isObject(req.body) ? req.body : {};
+  const input = sanitizeEntityInputForUser(req.user, entity, req.body);
   const nowIso = new Date().toISOString();
   const id = randomUUID();
   const data = {
@@ -956,7 +984,7 @@ app.post("/api/entities/:entity", requireAuth, async (req, res) => {
     summary: getEntityActionSummary({ action: "create", entity, data }),
     details: `${humanizeEntity(entity)} record created`,
   });
-  res.status(201).json(data);
+  res.status(201).json(sanitizeEntityDataForUser(req.user, entity, data));
 });
 
 app.post("/api/entities/:entity/bulk-delete", requireAuth, async (req, res) => {
@@ -1069,7 +1097,7 @@ app.patch("/api/entities/:entity/:id", requireAuth, async (req, res) => {
   if (!existing || existing.entity !== entity) return res.status(404).json({ error: `${entity} record not found` });
 
   const currentData = isObject(existing.data) ? existing.data : {};
-  const patch = isObject(req.body) ? req.body : {};
+  const patch = sanitizeEntityInputForUser(req.user, entity, req.body);
   const nowIso = new Date().toISOString();
   const merged = {
     ...currentData,
@@ -1094,7 +1122,7 @@ app.patch("/api/entities/:entity/:id", requireAuth, async (req, res) => {
     summary: getEntityActionSummary({ action: "update", entity, data: merged }),
     details: `${humanizeEntity(entity)} record updated`,
   });
-  res.json(merged);
+  res.json(sanitizeEntityDataForUser(req.user, entity, merged));
 });
 
 app.delete("/api/entities/:entity/:id", requireAuth, async (req, res) => {
@@ -1286,7 +1314,7 @@ app.get("/api/events", async (req, res) => {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
-    const client = { res, userId: user.id };
+    const client = { res, user };
     sseClients.add(client);
     sendSse(res, { type: "connected", at: new Date().toISOString() });
 

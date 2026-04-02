@@ -6,7 +6,7 @@ export default function PoultryWorkers() {
   const [houses, setHouses] = useState([]);
 
   useEffect(() => {
-    poultryClient.houses.list().then(setHouses);
+    poultryClient.houses.list().then(setHouses).catch(() => setHouses([]));
   }, []);
 
   const assignmentOptions = useMemo(

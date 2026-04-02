@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Plus } from "lucide-react";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { formatDateLabel, normalizeOptionalValue } from "@/modules/shared/formatters.js";
 
@@ -19,13 +20,20 @@ export default function GoatBreeding() {
   const [goats, setGoats] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [goatRows, breedingRows] = await Promise.all([goatsClient.registry.list(), goatsClient.breeding.list()]);
-    setGoats(goatRows);
-    setRecords(breedingRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [goatRows, breedingRows] = await Promise.all([goatsClient.registry.list(), goatsClient.breeding.list()]);
+      setGoats(goatRows);
+      setRecords(breedingRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load goat breeding records."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -71,6 +79,8 @@ export default function GoatBreeding() {
       ]}
       records={records}
       loading={loading}
+      loadError={loadError}
+      onRetry={load}
       summaryCards={summaryCards}
       emptyState={{
         icon: ClipboardList,

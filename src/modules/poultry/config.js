@@ -21,5 +21,5 @@ export const poultryNavItems = [
   { label: "Workers", path: "/poultry/workers", icon: Users },
   { label: "Sales", path: "/poultry/sales", icon: ShoppingCart },
   { label: "Expenses", path: "/poultry/expenses", icon: DollarSign },
-  { label: "Analytics", path: "/poultry/analytics", icon: BarChart3 },
+  { label: "Analytics", path: "/poultry/analytics", icon: BarChart3, ownerOnly: true },
 ];

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, ShoppingCart } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import RecordManagerPage from "@/modules/shared/RecordManagerPage.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 import { goatsClient } from "@/modules/goats/services/goatService.js";
 import { formatDateLabel } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
@@ -18,16 +21,25 @@ const initialValues = {
 
 export default function GoatSales() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [goats, setGoats] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const [goatRows, saleRows] = await Promise.all([goatsClient.registry.list(), goatsClient.sales.list()]);
-    setGoats(goatRows);
-    setRecords(saleRows);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [goatRows, saleRows] = await Promise.all([goatsClient.registry.list(), goatsClient.sales.list()]);
+      setGoats(goatRows);
+      setRecords(saleRows);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to load goat sales."));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -68,7 +80,9 @@ export default function GoatSales() {
       ]}
       records={records}
       loading={loading}
-      summaryCards={summaryCards}
+      loadError={loadError}
+      onRetry={load}
+      summaryCards={isAdmin ? summaryCards : []}
       emptyState={{
         icon: ShoppingCart,
         title: "No goat sales recorded",

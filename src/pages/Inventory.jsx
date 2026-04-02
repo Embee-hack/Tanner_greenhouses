@@ -5,11 +5,13 @@ import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Package, AlertTriangle, TrendingDown, ImageIcon, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/errors.js";
 
 const CATS = ["fertilizer","pesticide","seeds","packaging","equipment","tools","other"];
 const defaultForm = { name: "", category: "fertilizer", unit: "", quantity_in_stock: "", reorder_level: "", unit_cost: "", supplier: "", greenhouse_id: "", notes: "", image_url: "" };
@@ -18,17 +20,24 @@ function StockAdjustModal({ item, onClose, onDone, fmt }) {
   const [mode, setMode] = useState("add"); // "add" | "remove"
   const [qty, setQty] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const handle = async () => {
     const amount = parseFloat(qty) || 0;
     if (amount <= 0) return;
     setSaving(true);
-    const newQty = mode === "add"
-      ? (item.quantity_in_stock || 0) + amount
-      : Math.max(0, (item.quantity_in_stock || 0) - amount);
-    await base44.entities.InventoryItem.update(item.id, { quantity_in_stock: newQty });
-    setSaving(false);
-    onDone();
+    setError("");
+    try {
+      const newQty = mode === "add"
+        ? (item.quantity_in_stock || 0) + amount
+        : Math.max(0, (item.quantity_in_stock || 0) - amount);
+      await base44.entities.InventoryItem.update(item.id, { quantity_in_stock: newQty });
+      onDone();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to adjust stock."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -58,6 +67,7 @@ function StockAdjustModal({ item, onClose, onDone, fmt }) {
             } {item.unit}</strong>
           </div>
         )}
+        {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
         <div className="flex gap-2 pt-1">
           <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
           <Button className="flex-1" onClick={handle} disabled={saving || !qty || parseFloat(qty) <= 0}>
@@ -82,24 +92,33 @@ export default function Inventory() {
   const [adjustItem, setAdjustItem] = useState(null);
   const [uploadingImg, setUploadingImg] = useState(false);
   const fileRef = useRef();
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
 
-  const load = () => {
-    Promise.all([
-      base44.entities.InventoryItem.list("name"),
-      base44.entities.Greenhouse.list("code"),
-    ]).then(([inv, gh]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const [inv, gh] = await Promise.all([
+        base44.entities.InventoryItem.list("name"),
+        base44.entities.Greenhouse.list("code"),
+      ]);
       setItems(inv);
       setGreenhouses(gh);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to load inventory."));
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
 
-  const openAdd = () => { setEditItem(null); setForm(defaultForm); setShowModal(true); };
+  const openAdd = () => { setError(""); setEditItem(null); setForm(defaultForm); setShowModal(true); };
   const openEdit = (item) => {
+    setError("");
     setEditItem(item);
     setForm({ ...defaultForm, ...item, quantity_in_stock: item.quantity_in_stock ?? "", reorder_level: item.reorder_level ?? "", unit_cost: item.unit_cost ?? "" });
     setShowModal(true);
@@ -126,26 +145,36 @@ export default function Inventory() {
 
   const handleSave = async () => {
     setSaving(true);
-    const data = {
-      ...form,
-      quantity_in_stock: parseFloat(form.quantity_in_stock) || 0,
-      reorder_level: form.reorder_level !== "" ? parseFloat(form.reorder_level) : null,
-      unit_cost: form.unit_cost !== "" ? parseFloat(form.unit_cost) : null,
-      greenhouse_id: form.greenhouse_id || null,
-    };
-    if (editItem) {
-      await base44.entities.InventoryItem.update(editItem.id, data);
-    } else {
-      await base44.entities.InventoryItem.create(data);
+    setError("");
+    try {
+      const data = {
+        ...form,
+        quantity_in_stock: parseFloat(form.quantity_in_stock) || 0,
+        reorder_level: form.reorder_level !== "" ? parseFloat(form.reorder_level) : null,
+        unit_cost: form.unit_cost !== "" ? parseFloat(form.unit_cost) : null,
+        greenhouse_id: form.greenhouse_id || null,
+      };
+      if (editItem) {
+        await base44.entities.InventoryItem.update(editItem.id, data);
+      } else {
+        await base44.entities.InventoryItem.create(data);
+      }
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to save inventory item."));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setShowModal(false);
-    load();
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.InventoryItem.delete(id);
-    load();
+    try {
+      await base44.entities.InventoryItem.delete(id);
+      load();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to delete inventory item."));
+    }
   };
 
   const filtered = catFilter === "all" ? items : items.filter(i => i.category === catFilter);
@@ -162,6 +191,8 @@ export default function Inventory() {
           </Button>
         }
       />
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       {lowStock.length > 0 && (
         <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
@@ -314,6 +345,7 @@ export default function Inventory() {
           <FormField label="Notes">
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
           </FormField>
+          {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.name || !form.unit}>

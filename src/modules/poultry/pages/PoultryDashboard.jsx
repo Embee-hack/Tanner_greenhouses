@@ -12,26 +12,41 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/roles.js";
 import StatCard from "@/components/dashboard/StatCard";
+import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import AnalyticsPanel from "@/modules/shared/AnalyticsPanel.jsx";
 import { poultryClient } from "@/modules/poultry/services/poultryService.js";
 import { formatShortDate } from "@/modules/shared/formatters.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { getErrorMessage } from "@/lib/errors.js";
 
 export default function PoultryDashboard() {
   const { fmt } = useCurrency();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      setLoading(true);
-      const result = await poultryClient.getDashboard();
-      if (!cancelled) {
-        setData(result);
-        setLoading(false);
+      try {
+        setLoading(true);
+        const result = await poultryClient.getDashboard();
+        if (!cancelled) {
+          setData(result);
+          setLoadError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(getErrorMessage(error, "Failed to load the poultry dashboard."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -48,13 +63,34 @@ export default function PoultryDashboard() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
+      <ErrorBanner message={loadError} onRetry={() => {
+        setData(null);
+        setLoading(true);
+        poultryClient.getDashboard()
+          .then((result) => {
+            setData(result);
+            setLoadError("");
+          })
+          .catch((error) => {
+            setLoadError(getErrorMessage(error, "Failed to load the poultry dashboard."));
+          })
+          .finally(() => setLoading(false));
+      }} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <StatCard title="Active Houses" value={summary.active_houses || 0} subtitle="Houses in service" icon={Warehouse} color="primary" loading={loading} />
         <StatCard title="Active Flocks" value={summary.active_flocks || 0} subtitle="Current production batches" icon={Warehouse} color="primary" loading={loading} />
         <StatCard title="Live Birds" value={(summary.total_live_birds || 0).toLocaleString()} subtitle="Estimated birds on hand" icon={Egg} color="success" loading={loading} />
         <StatCard title="Eggs Today" value={(summary.eggs_today || 0).toLocaleString()} subtitle="Collected from daily logs" icon={Egg} color="accent" loading={loading} />
         <StatCard title="Mortality Today" value={(summary.mortality_today || 0).toLocaleString()} subtitle="Bird losses logged today" icon={Skull} color="danger" loading={loading} />
-        <StatCard title="Feed Today" value={`${(summary.feed_consumed_today || 0).toLocaleString()} kg`} subtitle="Feed consumed from production logs" icon={Activity} color="warning" loading={loading} />
-        <StatCard title="Revenue This Week" value={fmt(summary.revenue_this_week || 0)} subtitle="Poultry sales in the current week" icon={DollarSign} color="success" loading={loading} />
+        <StatCard
+          title={isAdmin ? "Revenue This Week" : "Feed Today"}
+          value={isAdmin ? fmt(summary.revenue_this_week || 0) : `${(summary.feed_consumed_today || 0).toLocaleString()} kg`}
+          subtitle={isAdmin ? "Poultry sales in the current week" : "Feed consumed from production logs"}
+          icon={isAdmin ? DollarSign : Activity}
+          color={isAdmin ? "success" : "warning"}
+          loading={loading}
+        />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -94,19 +130,21 @@ export default function PoultryDashboard() {
           </ResponsiveContainer>
         </AnalyticsPanel>
 
-        <AnalyticsPanel title="Revenue vs Expenses" subtitle="Weekly poultry cashflow snapshot">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={charts.revenue_vs_expense || []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
-              <XAxis dataKey="period" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => fmt(value)} />
-              <Tooltip formatter={(value) => fmt(value)} />
-              <Legend />
-              <Bar dataKey="revenue" fill="hsl(152,60%,32%)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="expense" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </AnalyticsPanel>
+        {isAdmin && (
+          <AnalyticsPanel title="Revenue vs Expenses" subtitle="Weekly poultry cashflow snapshot">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={charts.revenue_vs_expense || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(150,12%,88%)" vertical={false} />
+                <XAxis dataKey="period" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => fmt(value)} />
+                <Tooltip formatter={(value) => fmt(value)} />
+                <Legend />
+                <Bar dataKey="revenue" fill="hsl(152,60%,32%)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="expense" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </AnalyticsPanel>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.3fr_0.7fr] gap-4">
@@ -148,7 +186,10 @@ export default function PoultryDashboard() {
         </AnalyticsPanel>
       </div>
 
-      <AnalyticsPanel title="Flock Performance Snapshot" subtitle="Revenue, expenses, and profit estimate by flock">
+      <AnalyticsPanel
+        title={isAdmin ? "Flock Performance Snapshot" : "Flock Operations Snapshot"}
+        subtitle={isAdmin ? "Revenue, expenses, and profit estimate by flock" : "Live birds, egg output, and mortality by flock"}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -156,15 +197,20 @@ export default function PoultryDashboard() {
                 <th className="py-3 pr-4">Flock</th>
                 <th className="py-3 pr-4">Live Birds</th>
                 <th className="py-3 pr-4">Eggs</th>
-                <th className="py-3 pr-4">Revenue</th>
-                <th className="py-3 pr-4">Expenses</th>
-                <th className="py-3">Profit</th>
+                <th className="py-3 pr-4">Mortality</th>
+                {isAdmin && (
+                  <>
+                    <th className="py-3 pr-4">Revenue</th>
+                    <th className="py-3 pr-4">Expenses</th>
+                    <th className="py-3">Profit</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
               {performanceRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={isAdmin ? 7 : 4} className="py-8 text-center text-muted-foreground">
                     No flock performance data yet
                   </td>
                 </tr>
@@ -174,9 +220,14 @@ export default function PoultryDashboard() {
                     <td className="py-3 pr-4 font-medium text-foreground">{row.flock_code}</td>
                     <td className="py-3 pr-4">{row.current_live_birds.toLocaleString()}</td>
                     <td className="py-3 pr-4">{row.eggs.toLocaleString()}</td>
-                    <td className="py-3 pr-4">{fmt(row.revenue)}</td>
-                    <td className="py-3 pr-4">{fmt(row.expense)}</td>
-                    <td className="py-3 font-semibold text-foreground">{fmt(row.profit)}</td>
+                    <td className="py-3 pr-4">{row.mortality.toLocaleString()}</td>
+                    {isAdmin && (
+                      <>
+                        <td className="py-3 pr-4">{fmt(row.revenue)}</td>
+                        <td className="py-3 pr-4">{fmt(row.expense)}</td>
+                        <td className="py-3 font-semibold text-foreground">{fmt(row.profit)}</td>
+                      </>
+                    )}
                   </tr>
                 ))
               )}

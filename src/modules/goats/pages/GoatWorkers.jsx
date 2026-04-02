@@ -6,7 +6,7 @@ export default function GoatWorkers() {
   const [pens, setPens] = useState([]);
 
   useEffect(() => {
-    goatsClient.pens.list().then(setPens);
+    goatsClient.pens.list().then(setPens).catch(() => setPens([]));
   }, []);
 
   const assignmentOptions = useMemo(
