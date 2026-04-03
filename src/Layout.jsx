@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   DollarSign,
   Bug,
+  AlertTriangle,
   Thermometer,
   GitCompare,
   Menu,
@@ -51,8 +52,8 @@ const groupedNav = [
     icon: Bug,
     defaultOpen: false,
     items: [
-      { label: "Pest & Disease", icon: Bug, page: "Incidents" },
-      { label: "Treatments", icon: FlaskConical, page: "Treatments" },
+      { label: "Incident Log", icon: AlertTriangle, page: "Incidents" },
+      { label: "Response Log", icon: FlaskConical, page: "Treatments" },
       { label: "Environment", icon: Thermometer, page: "Environmental" },
     ],
   },
@@ -73,6 +74,8 @@ const groupedNav = [
     defaultOpen: false,
     items: [
       { label: "Workers", icon: HardHat, page: "Workers" },
+      { label: "Attendance Sheet", icon: CalendarDays, page: "WorkerAttendance" },
+      { label: "Grievance Log", icon: AlertTriangle, page: "WorkerGrievances" },
     ],
   },
   {

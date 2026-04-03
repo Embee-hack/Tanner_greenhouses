@@ -4,11 +4,12 @@ import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid } from "lucide-react";
+import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { getErrorMessage } from "@/lib/errors.js";
@@ -28,7 +29,7 @@ const blockColors = [
   "from-primary/60 to-primary/80",
 ];
 
-function GreenhouseCard({ gh, onEdit }) {
+function GreenhouseCard({ gh, onEdit, onDelete }) {
   const sc = statusConfig[gh.status] || statusConfig.active;
   const colorIdx = parseInt(gh.code?.replace(/\D/g, "") || "0") % blockColors.length;
   const gradient = blockColors[colorIdx];
@@ -79,6 +80,12 @@ function GreenhouseCard({ gh, onEdit }) {
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={() => onDelete(gh)}
+            className="p-1.5 rounded-lg border border-danger/20 hover:bg-danger/5 transition-colors text-danger"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>
@@ -102,6 +109,7 @@ function StatCard({ icon: Icon, label, value, sub, color }) {
 
 const defaultForm = { code: "", name: "", block_id: "", area: "", capacity_plants: "", status: "active", notes: "" };
 const defaultBlockForm = { code: "", name: "", notes: "" };
+const NONE_VALUE = "__none__";
 
 export default function Greenhouses() {
   const [greenhouses, setGreenhouses] = useState([]);
@@ -110,10 +118,13 @@ export default function Greenhouses() {
   const [showModal, setShowModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [editBlock, setEditBlock] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [blockForm, setBlockForm] = useState(defaultBlockForm);
   const [saving, setSaving] = useState(false);
   const [savingBlock, setSavingBlock] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [blockError, setBlockError] = useState("");
@@ -143,6 +154,7 @@ export default function Greenhouses() {
     setEditItem(null);
     setShowModal(true);
   };
+
   const openEdit = (row) => {
     setError("");
     setForm({
@@ -154,6 +166,37 @@ export default function Greenhouses() {
     });
     setEditItem(row);
     setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditItem(null);
+    setForm(defaultForm);
+    setError("");
+  };
+
+  const openBlockModal = () => {
+    setBlockError("");
+    setEditBlock(null);
+    setBlockForm(defaultBlockForm);
+    setShowBlockModal(true);
+  };
+
+  const openEditBlock = (block) => {
+    setBlockError("");
+    setEditBlock(block);
+    setBlockForm({
+      ...defaultBlockForm,
+      ...block,
+    });
+    setShowBlockModal(true);
+  };
+
+  const closeBlockModal = () => {
+    setShowBlockModal(false);
+    setEditBlock(null);
+    setBlockForm(defaultBlockForm);
+    setBlockError("");
   };
 
   const handleSave = async () => {
@@ -172,8 +215,8 @@ export default function Greenhouses() {
       } else {
         await base44.entities.Greenhouse.create(data);
       }
-      setShowModal(false);
-      load();
+      closeModal();
+      await load();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save greenhouse."));
     } finally {
@@ -181,25 +224,67 @@ export default function Greenhouses() {
     }
   };
 
-  const handleCreateBlock = async () => {
+  const handleSaveBlock = async () => {
     const blockCode = String(blockForm.code || "").trim();
     const blockName = String(blockForm.name || "").trim();
     if (!blockCode && !blockName) return;
     setSavingBlock(true);
     setBlockError("");
     try {
-      await base44.entities.Block.create({
+      const payload = {
         code: blockCode || null,
         name: blockName || blockCode || "Unnamed Block",
         notes: String(blockForm.notes || "").trim() || null,
-        status: "active",
-      });
+        status: editBlock?.status || "active",
+      };
+      if (editBlock) {
+        await base44.entities.Block.update(editBlock.id, payload);
+      } else {
+        await base44.entities.Block.create(payload);
+      }
+      setEditBlock(null);
       setBlockForm(defaultBlockForm);
-      load();
+      await load();
     } catch (err) {
-      setBlockError(getErrorMessage(err, "Failed to create block."));
+      setBlockError(getErrorMessage(err, `Failed to ${editBlock ? "update" : "create"} block.`));
     } finally {
       setSavingBlock(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteDialog) return;
+    setDeleting(true);
+    try {
+      if (deleteDialog.kind === "block") {
+        const greenhouseCount = greenhouses.filter((greenhouse) => greenhouse.block_id === deleteDialog.item.id).length;
+        if (greenhouseCount > 0) {
+          setBlockError(`This block is assigned to ${greenhouseCount} greenhouse${greenhouseCount === 1 ? "" : "s"}. Reassign them first.`);
+          setDeleting(false);
+          return;
+        }
+        await base44.entities.Block.delete(deleteDialog.item.id);
+        if (editBlock?.id === deleteDialog.item.id) {
+          setEditBlock(null);
+          setBlockForm(defaultBlockForm);
+        }
+      } else {
+        await base44.entities.Greenhouse.delete(deleteDialog.item.id);
+        if (editItem?.id === deleteDialog.item.id) {
+          closeModal();
+        }
+      }
+      setDeleteDialog(null);
+      await load();
+    } catch (err) {
+      const fallback = deleteDialog.kind === "block" ? "Failed to delete block." : "Failed to delete greenhouse.";
+      if (deleteDialog.kind === "block") {
+        setBlockError(getErrorMessage(err, fallback));
+      } else {
+        setLoadError(getErrorMessage(err, fallback));
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -221,7 +306,7 @@ export default function Greenhouses() {
         subtitle={`${greenhouses.length} total · ${activeCount} active`}
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={() => { setBlockError(""); setShowBlockModal(true); }} className="gap-1.5">
+            <Button size="sm" variant="outline" onClick={openBlockModal} className="gap-1.5">
               <Layers className="w-4 h-4" /> Manage Blocks
             </Button>
             <Button size="sm" onClick={openAdd} className="gap-1.5">
@@ -253,23 +338,23 @@ export default function Greenhouses() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {greenhouses.map(gh => (
-            <GreenhouseCard key={gh.id} gh={gh} onEdit={openEdit} />
+            <GreenhouseCard key={gh.id} gh={gh} onEdit={openEdit} onDelete={(row) => setDeleteDialog({ kind: "greenhouse", item: row })} />
           ))}
         </div>
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={editItem ? "Edit Greenhouse" : "Add Greenhouse"}>
+      <Modal open={showModal} onClose={closeModal} title={editItem ? "Edit Greenhouse" : "Add Greenhouse"}>
         <div className="space-y-4">
           {blocks.length > 0 && (
             <FormField label="Block">
               <Select
-                value={form.block_id}
+                value={form.block_id || NONE_VALUE}
                 onValueChange={(v) =>
                   setForm((f) => {
                     const selectedBlock = blocks.find((b) => b.id === v);
                     return {
                       ...f,
-                      block_id: v,
+                      block_id: v === NONE_VALUE ? "" : v,
                       name: f.name || selectedBlock?.name || "",
                     };
                   })
@@ -277,6 +362,7 @@ export default function Greenhouses() {
               >
                 <SelectTrigger><SelectValue placeholder="Select block (optional)" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NONE_VALUE}>No block assigned</SelectItem>
                   {blocks.map((block) => (
                     <SelectItem key={block.id} value={block.id}>{formatBlockLabel(block)}</SelectItem>
                   ))}
@@ -315,7 +401,7 @@ export default function Greenhouses() {
           </FormField>
           {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.code}>
               {saving ? "Saving…" : editItem ? "Update" : "Add Greenhouse"}
             </Button>
@@ -323,7 +409,7 @@ export default function Greenhouses() {
         </div>
       </Modal>
 
-      <Modal open={showBlockModal} onClose={() => setShowBlockModal(false)} title="Manage Blocks">
+      <Modal open={showBlockModal} onClose={closeBlockModal} title="Manage Blocks">
         <div className="space-y-4">
           {blockError ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{blockError}</div> : null}
           <div className="grid grid-cols-2 gap-4">
@@ -351,10 +437,10 @@ export default function Greenhouses() {
           </FormField>
           <div className="flex justify-end">
             <Button
-              onClick={handleCreateBlock}
+              onClick={handleSaveBlock}
               disabled={savingBlock || (!String(blockForm.code || "").trim() && !String(blockForm.name || "").trim())}
             >
-              {savingBlock ? "Saving…" : "Create Block"}
+              {savingBlock ? "Saving…" : editBlock ? "Save Block" : "Create Block"}
             </Button>
           </div>
 
@@ -365,15 +451,41 @@ export default function Greenhouses() {
               </div>
             ) : (
               blocks.map((block) => (
-                <div key={block.id} className="px-4 py-3">
-                  <div className="text-sm font-semibold text-foreground">{formatBlockLabel(block)}</div>
-                  {block.notes && <div className="text-xs text-muted-foreground mt-0.5">{block.notes}</div>}
+                <div key={block.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{formatBlockLabel(block)}</div>
+                    {block.notes && <div className="text-xs text-muted-foreground mt-0.5">{block.notes}</div>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => openEditBlock(block)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                    <button onClick={() => setDeleteDialog({ kind: "block", item: block })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
+                      <Trash2 className="w-3 h-3" /> Delete
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteDialog}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDialog(null);
+        }}
+        title={deleteDialog?.kind === "block" ? "Delete this block?" : "Delete this greenhouse?"}
+        description={
+          deleteDialog?.kind === "block"
+            ? "This block will be removed if no greenhouse is assigned to it."
+            : "This greenhouse will be removed from the app. Review related records before deleting."
+        }
+        confirmLabel={deleteDialog?.kind === "block" ? "Delete Block" : "Delete Greenhouse"}
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

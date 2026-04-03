@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertCircle, Info, Bell, X, TrendingDown, Package, Bug, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getIncidentTitle, getIncidentTypeLabel, isIncidentActive } from "@/lib/incidents.js";
 
 function generateAlerts(harvests, incidents, expenses, inventoryItems = [], greenhouses = [], cycles = [], includeFinanceAlerts = true) {
   const alerts = [];
@@ -10,29 +11,31 @@ function generateAlerts(harvests, incidents, expenses, inventoryItems = [], gree
 
   // ─── CRITICAL: open high/critical incidents ───────────────────────────────
   incidents
-    .filter(i => i.status === "open" && (i.severity === "critical" || i.severity === "high"))
+    .filter(i => isIncidentActive(i.status) && (i.severity === "critical" || i.severity === "high"))
     .slice(0, 3)
     .forEach(inc => {
+      const typeLabel = getIncidentTypeLabel(inc.incident_type).toLowerCase();
       alerts.push({
         id: `inc-crit-${inc.id}`,
         priority: "critical",
-        category: "pest",
-        message: `CRITICAL incident: ${inc.name || inc.incident_type} (${inc.severity}) — greenhouse requires immediate attention`,
-        icon: AlertCircle,
+        category: "incident",
+        message: `CRITICAL incident: ${getIncidentTitle(inc)} (${typeLabel}, ${inc.severity}) — greenhouse requires immediate attention`,
+        icon: inc.incident_type === "pest" || inc.incident_type === "disease" ? Bug : AlertCircle,
       });
     });
 
   // ─── HIGH: open medium incidents ─────────────────────────────────────────
   incidents
-    .filter(i => i.status === "open" && i.severity === "medium")
+    .filter(i => isIncidentActive(i.status) && i.severity === "medium")
     .slice(0, 2)
     .forEach(inc => {
+      const typeLabel = getIncidentTypeLabel(inc.incident_type).toLowerCase();
       alerts.push({
         id: `inc-med-${inc.id}`,
         priority: "high",
-        category: "pest",
-        message: `Active incident: ${inc.name || inc.incident_type} — not yet treated`,
-        icon: Bug,
+        category: "incident",
+        message: `Active incident: ${getIncidentTitle(inc)} (${typeLabel}) — not yet resolved`,
+        icon: inc.incident_type === "pest" || inc.incident_type === "disease" ? Bug : AlertCircle,
       });
     });
 

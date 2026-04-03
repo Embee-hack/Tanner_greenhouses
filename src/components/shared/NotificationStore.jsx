@@ -2,6 +2,7 @@
 // Components can subscribe to updates via subscribe().
 
 import { base44 } from "@/api/base44Client";
+import { getIncidentTitle } from "@/lib/incidents.js";
 
 const STORAGE_KEY = "gpdNotifications";
 const UPCOMING_EVENT_LOOKAHEAD_HOURS = 24;
@@ -80,10 +81,16 @@ function getPriorityForEvent(entityName, data) {
     if (data?.severity === "high") return "high";
     return "medium";
   }
+  if (entityName === "WorkerGrievance") {
+    if (data?.severity === "critical") return "critical";
+    if (data?.severity === "high") return "high";
+    return "medium";
+  }
   if (entityName === "InventoryItem" && data?.reorder_level != null && data?.quantity_in_stock != null) {
     if (data.quantity_in_stock <= data.reorder_level) return "high";
   }
   if (entityName === "Treatment") return "medium";
+  if (entityName === "WorkerAttendance") return data?.status === "absent" ? "high" : "info";
   if (entityName === "CalendarEvent") return "medium";
   return "info";
 }
@@ -94,8 +101,8 @@ function buildMessage(entityName, type, data) {
       return type === "create" ? `New harvest logged: ${data?.kg_harvested || 0} kg` : `Harvest record updated`;
     case "Incident":
       return type === "create"
-        ? `New ${data?.severity || ""} incident: ${data?.name || data?.incident_type || "Pest/Disease"}`
-        : `Incident updated: ${data?.name || data?.incident_type || ""}`;
+        ? `New ${data?.severity || ""} incident: ${getIncidentTitle(data)}`
+        : `Incident updated: ${getIncidentTitle(data)}`;
     case "ExpenseRecord":
       return type === "create"
         ? `Expense logged: ${data?.category || ""} — ₦${(data?.amount || 0).toLocaleString()}`
@@ -103,7 +110,15 @@ function buildMessage(entityName, type, data) {
     case "SalesRecord":
       return type === "create" ? `New sale: ${data?.kg_sold || 0} kg sold` : `Sales record updated`;
     case "Treatment":
-      return type === "create" ? `Treatment applied: ${data?.treatment_type || ""}` : `Treatment updated`;
+      return type === "create" ? `Response logged: ${data?.treatment_type || ""}` : `Response updated`;
+    case "WorkerAttendance":
+      return type === "create"
+        ? `Attendance marked: ${data?.worker_name || data?.name || "Worker"} (${data?.status || "recorded"})`
+        : `Attendance updated: ${data?.worker_name || data?.name || "Worker"}`;
+    case "WorkerGrievance":
+      return type === "create"
+        ? `Grievance logged: ${data?.worker_name || "Worker"} — ${data?.title || data?.category || "Issue"}`
+        : `Grievance updated: ${data?.worker_name || "Worker"}`;
     case "CropCycle":
       return type === "create" ? `New crop cycle started` : `Crop cycle updated`;
     case "PlantPopulationLog":
@@ -128,6 +143,8 @@ const CATEGORY_MAP = {
   ExpenseRecord: "expense",
   SalesRecord: "sales",
   Treatment: "treatment",
+  WorkerAttendance: "attendance",
+  WorkerGrievance: "grievance",
   CropCycle: "cycle",
   PlantPopulationLog: "population",
   InventoryItem: "inventory",
@@ -140,6 +157,8 @@ const PAGE_LINK_MAP = {
   ExpenseRecord: "Expenses",
   SalesRecord: "Sales",
   Treatment: "Treatments",
+  WorkerAttendance: "WorkerAttendance",
+  WorkerGrievance: "WorkerGrievances",
   CropCycle: "CropCycles",
   PlantPopulationLog: "CropCycles",
   InventoryItem: "Inventory",
@@ -223,7 +242,7 @@ export function initNotificationStore() {
 
   const entities = [
     "HarvestRecord", "Incident", "ExpenseRecord", "SalesRecord",
-    "Treatment", "CropCycle", "PlantPopulationLog", "InventoryItem", "CalendarEvent"
+    "Treatment", "WorkerAttendance", "WorkerGrievance", "CropCycle", "PlantPopulationLog", "InventoryItem", "CalendarEvent"
   ];
 
   entities.forEach(entityName => {

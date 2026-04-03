@@ -3,9 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Shield, User, Upload, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Shield, User, Upload, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -19,7 +20,7 @@ const roleLabels = {
   farm_manager: "Farm Manager",
 };
 
-const defaultCreateForm = {
+const defaultUserForm = {
   full_name: "",
   email: "",
   password: "",
@@ -29,13 +30,16 @@ const defaultCreateForm = {
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState(defaultCreateForm);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userForm, setUserForm] = useState(defaultUserForm);
+  const [savingUser, setSavingUser] = useState(false);
+  const [formError, setFormError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState("");
 
   const load = async () => {
@@ -57,36 +61,83 @@ export default function UserManagement() {
   }, []);
 
   const openCreateModal = () => {
-    setCreateForm(defaultCreateForm);
-    setCreateError("");
-    setShowCreatePassword(false);
-    setShowCreateModal(true);
+    setEditingUser(null);
+    setUserForm(defaultUserForm);
+    setFormError("");
+    setShowPassword(false);
+    setShowUserModal(true);
   };
 
-  const handleCreateUser = async () => {
-    if (!createForm.email || !createForm.password) return;
-    if (createForm.password.length < 8) {
-      setCreateError("Password must be at least 8 characters.");
+  const openEditModal = (user) => {
+    setEditingUser(user);
+    setUserForm({
+      full_name: user.full_name || "",
+      email: user.email || "",
+      password: "",
+      role: user.role || "farm_manager",
+    });
+    setFormError("");
+    setShowPassword(false);
+    setShowUserModal(true);
+  };
+
+  const closeUserModal = () => {
+    setShowUserModal(false);
+    setEditingUser(null);
+    setUserForm(defaultUserForm);
+    setFormError("");
+    setShowPassword(false);
+  };
+
+  const handleSaveUser = async () => {
+    if (!userForm.email) return;
+    if (!editingUser && !userForm.password) return;
+    if (userForm.password && userForm.password.length < 8) {
+      setFormError("Password must be at least 8 characters.");
       return;
     }
 
-    setCreating(true);
-    setCreateError("");
+    setSavingUser(true);
+    setFormError("");
     try {
-      const result = await base44.users.createUser({
-        full_name: createForm.full_name || null,
-        email: createForm.email,
-        password: createForm.password,
-        role: createForm.role,
-      });
-      if (result?.user) {
-        setUsers((prev) => [result.user, ...prev]);
+      if (editingUser) {
+        await base44.entities.User.update(editingUser.id, {
+          full_name: userForm.full_name || null,
+          email: userForm.email,
+          role: userForm.role,
+          ...(userForm.password ? { password: userForm.password } : {}),
+        });
+      } else {
+        await base44.users.createUser({
+          full_name: userForm.full_name || null,
+          email: userForm.email,
+          password: userForm.password,
+          role: userForm.role,
+        });
       }
-      setShowCreateModal(false);
+      closeUserModal();
+      await load();
     } catch (error) {
-      setCreateError(error?.message || "Failed to create user.");
+      setFormError(error?.message || `Failed to ${editingUser ? "update" : "create"} user.`);
     } finally {
-      setCreating(false);
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUser) return;
+    setDeleting(true);
+    try {
+      await base44.entities.User.delete(deleteUser.id);
+      setDeleteUser(null);
+      if (editingUser?.id === deleteUser.id) {
+        closeUserModal();
+      }
+      await load();
+    } catch (error) {
+      setLoadError(getErrorMessage(error, "Failed to delete user."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -132,13 +183,14 @@ export default function UserManagement() {
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Email</th>
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Joined</th>
+              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className="border-t border-border/50">
-                  {Array.from({ length: 4 }).map((_, j) => (
+                  {Array.from({ length: 5 }).map((_, j) => (
                     <td key={j} className="px-5 py-4">
                       <div className="h-4 bg-muted animate-pulse rounded w-24" />
                     </td>
@@ -186,6 +238,24 @@ export default function UserManagement() {
                   <td className="px-5 py-3 text-muted-foreground text-xs hidden sm:table-cell">
                     {u.created_date ? new Date(u.created_date).toLocaleDateString() : "—"}
                   </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" className="h-8" onClick={() => openEditModal(u)}>
+                        <Pencil className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-danger hover:text-danger"
+                        onClick={() => setDeleteUser(u)}
+                        disabled={currentUser?.id === u.id}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
@@ -194,12 +264,12 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {showCreateModal && (
-        <Modal open={showCreateModal} title="Create User" onClose={() => setShowCreateModal(false)}>
+      {showUserModal && (
+        <Modal open={showUserModal} title={editingUser ? "Edit User" : "Create User"} onClose={closeUserModal}>
           <div className="space-y-4">
-            {createError && (
+            {formError && (
               <div className="text-sm rounded-lg px-3 py-2 bg-danger/10 text-danger">
-                {createError}
+                {formError}
               </div>
             )}
 
@@ -207,8 +277,8 @@ export default function UserManagement() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Full name</label>
               <Input
                 placeholder="Jane Doe"
-                value={createForm.full_name}
-                onChange={(e) => setCreateForm((f) => ({ ...f, full_name: e.target.value }))}
+                value={userForm.full_name}
+                onChange={(e) => setUserForm((f) => ({ ...f, full_name: e.target.value }))}
               />
             </div>
 
@@ -217,29 +287,31 @@ export default function UserManagement() {
               <Input
                 type="email"
                 placeholder="manager@farm.com"
-                value={createForm.email}
-                onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                value={userForm.email}
+                onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))}
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Password</label>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                {editingUser ? "New password" : "Password"}
+              </label>
               <div className="relative">
                 <Input
-                  type={showCreatePassword ? "text" : "password"}
-                  placeholder="Minimum 8 characters"
-                  value={createForm.password}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                  type={showPassword ? "text" : "password"}
+                  placeholder={editingUser ? "Leave blank to keep current password" : "Minimum 8 characters"}
+                  value={userForm.password}
+                  onChange={(e) => setUserForm((f) => ({ ...f, password: e.target.value }))}
                   autoComplete="new-password"
                   className="pr-10"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowCreatePassword((v) => !v)}
-                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
                 >
-                  {showCreatePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -248,9 +320,9 @@ export default function UserManagement() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Role</label>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setCreateForm((f) => ({ ...f, role: "farm_manager" }))}
+                  onClick={() => setUserForm((f) => ({ ...f, role: "farm_manager" }))}
                   className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    createForm.role === "farm_manager" ? "border-primary bg-primary/5" : "border-border"
+                    userForm.role === "farm_manager" ? "border-primary bg-primary/5" : "border-border"
                   }`}
                 >
                   <User className="w-4 h-4 mb-1 text-muted-foreground" />
@@ -258,9 +330,9 @@ export default function UserManagement() {
                   <div className="text-xs text-muted-foreground">Can manage farm operations data</div>
                 </button>
                 <button
-                  onClick={() => setCreateForm((f) => ({ ...f, role: "admin" }))}
+                  onClick={() => setUserForm((f) => ({ ...f, role: "admin" }))}
                   className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    createForm.role === "admin" ? "border-primary bg-primary/5" : "border-border"
+                    userForm.role === "admin" ? "border-primary bg-primary/5" : "border-border"
                   }`}
                 >
                   <Shield className="w-4 h-4 mb-1 text-primary" />
@@ -271,17 +343,32 @@ export default function UserManagement() {
             </div>
 
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              <Button variant="outline" onClick={closeUserModal}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateUser} disabled={!createForm.email || !createForm.password || creating}>
+              <Button
+                onClick={handleSaveUser}
+                disabled={!userForm.email || (!editingUser && !userForm.password) || savingUser}
+              >
                 <UserPlus className="w-4 h-4 mr-1" />
-                {creating ? "Creating..." : "Create User"}
+                {savingUser ? "Saving..." : editingUser ? "Save Changes" : "Create User"}
               </Button>
             </div>
           </div>
         </Modal>
       )}
+
+      <DeleteConfirmDialog
+        open={!!deleteUser}
+        onOpenChange={(open) => {
+          if (!open) setDeleteUser(null);
+        }}
+        title="Delete this user?"
+        description="This user account will be removed from the app. This action cannot be undone."
+        confirmLabel="Delete User"
+        loading={deleting}
+        onConfirm={handleDeleteUser}
+      />
     </div>
   );
 }

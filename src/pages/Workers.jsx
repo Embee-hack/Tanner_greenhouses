@@ -65,6 +65,7 @@ export default function Workers() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
   const [newRoleName, setNewRoleName] = useState("");
+  const [editingRole, setEditingRole] = useState(null);
   const [roleError, setRoleError] = useState("");
   const [savingRole, setSavingRole] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -202,18 +203,25 @@ export default function Workers() {
   const openRoleManager = () => {
     setRoleError("");
     setNewRoleName("");
+    setEditingRole(null);
     setShowRoleModal(true);
   };
 
-  const handleCreateRole = async () => {
+  const openEditRole = (role) => {
+    setEditingRole(role);
+    setNewRoleName(role.name || "");
+    setRoleError("");
+  };
+
+  const handleSaveRole = async () => {
     const name = String(newRoleName || "").trim();
-    const key = normalizeRoleKey(name);
+    const key = editingRole?.key || normalizeRoleKey(name);
     if (!key) {
       setRoleError("Role name must contain letters or numbers.");
       return;
     }
 
-    if (roleOptions.some((item) => item.key === key)) {
+    if (roleOptions.some((item) => item.key === key && key !== editingRole?.key)) {
       setRoleError("This role already exists.");
       return;
     }
@@ -221,15 +229,24 @@ export default function Workers() {
     setRoleError("");
     setSavingRole(true);
     try {
-      const created = await base44.entities.WorkerRole.create({
-        key,
-        name,
-        status: "active",
-      });
-      setRoleCatalog((prev) => [...prev, created]);
+      if (editingRole) {
+        const updated = await base44.entities.WorkerRole.update(editingRole.id, {
+          ...editingRole,
+          name,
+        });
+        setRoleCatalog((prev) => prev.map((item) => (item.id === editingRole.id ? updated : item)));
+      } else {
+        const created = await base44.entities.WorkerRole.create({
+          key,
+          name,
+          status: "active",
+        });
+        setRoleCatalog((prev) => [...prev, created]);
+      }
+      setEditingRole(null);
       setNewRoleName("");
     } catch (err) {
-      setRoleError(getErrorMessage(err, "Failed to create worker role."));
+      setRoleError(getErrorMessage(err, `Failed to ${editingRole ? "update" : "create"} worker role.`));
     } finally {
       setSavingRole(false);
     }
@@ -511,8 +528,13 @@ export default function Workers() {
           {roleError && <div className="text-sm rounded-lg px-3 py-2 bg-danger/10 text-danger">{roleError}</div>}
           <div className="flex gap-2">
             <Input placeholder="e.g. Quality Supervisor" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
-            <Button onClick={handleCreateRole} disabled={savingRole || !String(newRoleName || "").trim()}>
-              {savingRole ? "Creating..." : "Create Role"}
+            {editingRole ? (
+              <Button variant="outline" onClick={() => { setEditingRole(null); setNewRoleName(""); setRoleError(""); }}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button onClick={handleSaveRole} disabled={savingRole || !String(newRoleName || "").trim()}>
+              {savingRole ? "Saving..." : editingRole ? "Save Role" : "Create Role"}
             </Button>
           </div>
 
@@ -535,15 +557,21 @@ export default function Workers() {
                     <div className="text-sm font-medium text-foreground">{role.name}</div>
                     <div className="text-xs text-muted-foreground">Custom role</div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-danger hover:text-danger"
-                    onClick={() => handleDeleteCustomRole(role)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="h-8" onClick={() => openEditRole(role)}>
+                      <Pencil className="w-4 h-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-danger hover:text-danger"
+                      onClick={() => handleDeleteCustomRole(role)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               ))
             )}

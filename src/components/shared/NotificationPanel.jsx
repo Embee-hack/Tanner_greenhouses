@@ -37,10 +37,12 @@ const PRIORITY_STYLES = {
 
 const CATEGORY_EMOJI = {
   harvest: "🌿",
-  incident: "🐛",
+  incident: "⚠️",
   expense: "💸",
   sales: "📦",
-  treatment: "🧪",
+  treatment: "🛠️",
+  attendance: "🗓️",
+  grievance: "🚨",
   cycle: "🔄",
   population: "🌱",
   inventory: "📋",

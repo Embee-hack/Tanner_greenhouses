@@ -1075,8 +1075,29 @@ app.patch("/api/entities/:entity/:id", requireAuth, async (req, res) => {
     if (!isAdmin(req.user) && req.user.id !== id) return res.status(403).json({ error: "Forbidden" });
     const patch = isObject(req.body) ? req.body : {};
     const data = {};
-    if (typeof patch.full_name === "string" || patch.full_name === null) data.full_name = patch.full_name;
+    if (typeof patch.full_name === "string" || patch.full_name === null) {
+      data.full_name = typeof patch.full_name === "string" ? String(patch.full_name).trim() || null : null;
+    }
     if (typeof patch.profile_picture === "string" || patch.profile_picture === null) data.profile_picture = patch.profile_picture;
+    if (typeof patch.email === "string") {
+      const email = String(patch.email || "").trim().toLowerCase();
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      if (email !== existing.email) {
+        const emailOwner = await prisma.user.findUnique({ where: { email } });
+        if (emailOwner && emailOwner.id !== id) {
+          return res.status(409).json({ error: "User with this email already exists" });
+        }
+      }
+      data.email = email;
+    }
+    if (typeof patch.password === "string" && patch.password.length > 0) {
+      if (patch.password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      data.password_hash = await bcrypt.hash(String(patch.password), 10);
+    }
     if (isAdmin(req.user) && typeof patch.role === "string") data.role = normalizeUserRole(patch.role);
     const updated = await prisma.user.update({ where: { id }, data });
     const payload = toPublicUser(updated);

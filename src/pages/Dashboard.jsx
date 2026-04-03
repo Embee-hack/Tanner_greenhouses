@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
+import { getIncidentTitle, getIncidentTypeLabel, isIncidentActive } from "@/lib/incidents.js";
 import { createPageUrl } from "@/utils";
 import {
   ArrowRight, CalendarDays, CheckCircle2, CircleDashed, DollarSign, TrendingUp, Package, Sprout, BarChart2, ShoppingCart, AlertTriangle, Warehouse, Users
@@ -139,7 +140,7 @@ export default function Dashboard() {
   const totalProfit = totalRevenue - totalExpenses;
   const totalKg = harvests.reduce((s, h) => s + (h.kg_harvested || 0), 0);
   const activeGreenhouses = greenhouses.filter((g) => g.status === "active").length;
-  const openIncidents = incidents.filter((incident) => incident.status === "open" || incident.status === "treated").length;
+  const activeIncidents = incidents.filter((incident) => isIncidentActive(incident.status)).length;
   const activeCycles = cycles.filter((cycle) => cycle.status === "active").length;
 
   const latestPop = {};
@@ -249,7 +250,7 @@ export default function Dashboard() {
 
   const completedChecklistCount = checklistItems.filter((item) => item.done).length;
   const urgentIncidents = incidents
-    .filter((incident) => incident.status === "open" || incident.status === "treated")
+    .filter((incident) => isIncidentActive(incident.status))
     .sort((a, b) => {
       const severityDiff = (severityRank[a.severity] ?? 99) - (severityRank[b.severity] ?? 99);
       if (severityDiff !== 0) return severityDiff;
@@ -290,7 +291,7 @@ export default function Dashboard() {
             <StatCard title="Active Greenhouses" value={activeGreenhouses} icon={Warehouse} color="primary" loading={loading} subtitle={`${activeCycles} crop cycle${activeCycles === 1 ? "" : "s"} running`} />
             <StatCard title="Active Plants" value={totalActivePlants.toLocaleString()} icon={Sprout} color="accent" loading={loading} subtitle="Current live plant count" />
             <StatCard title="Harvest Volume" value={`${totalKg.toLocaleString()} kg`} icon={BarChart2} color="success" loading={loading} subtitle="Recorded harvest output" />
-            <StatCard title="Open Incidents" value={openIncidents} icon={AlertTriangle} color={openIncidents > 0 ? "warning" : "primary"} loading={loading} subtitle="Issues needing follow-up" />
+            <StatCard title="Active Incidents" value={activeIncidents} icon={AlertTriangle} color={activeIncidents > 0 ? "warning" : "primary"} loading={loading} subtitle="Issues needing follow-up" />
           </>
         )}
       </div>
@@ -345,7 +346,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="font-semibold text-sm text-foreground">Upcoming This Week</h3>
-              <p className="text-xs text-muted-foreground mt-1">Open incidents and scheduled work over the next 7 days</p>
+              <p className="text-xs text-muted-foreground mt-1">Active incidents and scheduled work over the next 7 days</p>
             </div>
             <Link to={createPageUrl("FarmCalendar")} className="text-xs font-semibold text-primary hover:text-primary/80">
               Open Calendar
@@ -373,9 +374,13 @@ export default function Dashboard() {
                       <div key={incident.id} className="rounded-xl border border-border px-3 py-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">{incident.name || incident.incident_type}</p>
+                            <p className="text-sm font-medium text-foreground">{getIncidentTitle(incident)}</p>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {(greenhouses.find((gh) => gh.id === incident.greenhouse_id)?.code || "Unassigned greenhouse")} · {incident.date || "No date"}
+                              {[
+                                greenhouses.find((gh) => gh.id === incident.greenhouse_id)?.code || "Unassigned greenhouse",
+                                getIncidentTypeLabel(incident.incident_type),
+                                incident.date || "No date",
+                              ].join(" · ")}
                             </p>
                           </div>
                           <span className="rounded-full bg-warning/10 px-2.5 py-1 text-[11px] font-semibold capitalize text-warning">

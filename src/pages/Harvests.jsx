@@ -5,11 +5,12 @@ import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, BarChart3 } from "lucide-react";
+import { Plus, BarChart3, Pencil, Trash2 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -21,8 +22,11 @@ export default function Harvests() {
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
 
@@ -48,25 +52,79 @@ export default function Harvests() {
   useEffect(() => { load(); }, []);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
-  const availableCycles = cycles.filter(c => c.greenhouse_id === form.greenhouse_id && c.status === "active");
+  const availableCycles = cycles.filter(
+    (cycle) => cycle.greenhouse_id === form.greenhouse_id && (cycle.status === "active" || cycle.id === form.cycle_id)
+  );
+
+  const openCreateModal = () => {
+    setEditItem(null);
+    setForm(defaultForm);
+    setError("");
+    setShowModal(true);
+  };
+
+  const openEditModal = (record) => {
+    setEditItem(record);
+    setForm({
+      ...defaultForm,
+      ...record,
+      cycle_id: record.cycle_id || "",
+      kg_harvested: record.kg_harvested != null ? String(record.kg_harvested) : "",
+      grade_a_kg: record.grade_a_kg != null ? String(record.grade_a_kg) : "",
+      grade_b_kg: record.grade_b_kg != null ? String(record.grade_b_kg) : "",
+      grade_c_kg: record.grade_c_kg != null ? String(record.grade_c_kg) : "",
+    });
+    setError("");
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditItem(null);
+    setForm(defaultForm);
+    setError("");
+  };
 
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
-      await base44.entities.HarvestRecord.create({
+      const payload = {
         ...form,
         kg_harvested: parseFloat(form.kg_harvested) || 0,
         grade_a_kg: parseFloat(form.grade_a_kg) || 0,
         grade_b_kg: parseFloat(form.grade_b_kg) || 0,
         grade_c_kg: parseFloat(form.grade_c_kg) || 0,
-      });
-      setShowModal(false);
-      load();
+        cycle_id: form.cycle_id || null,
+      };
+      if (editItem) {
+        await base44.entities.HarvestRecord.update(editItem.id, payload);
+      } else {
+        await base44.entities.HarvestRecord.create(payload);
+      }
+      closeModal();
+      await load();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save harvest record."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+    setDeleting(true);
+    try {
+      await base44.entities.HarvestRecord.delete(deleteItem.id);
+      setDeleteItem(null);
+      if (editItem?.id === deleteItem.id) {
+        closeModal();
+      }
+      await load();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to delete harvest record."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -87,6 +145,20 @@ export default function Harvests() {
     { key: "grade_b_kg", label: "Grade B", align: "right", render: v => v > 0 ? v.toFixed(1) : "—" },
     { key: "grade_c_kg", label: "Grade C", align: "right", render: v => v > 0 ? v.toFixed(1) : "—" },
     { key: "notes", label: "Notes", render: v => v || "—" },
+    {
+      key: "id",
+      label: "Actions",
+      render: (_, row) => (
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => openEditModal(row)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+            <Pencil className="w-3 h-3" /> Edit
+          </button>
+          <button onClick={() => setDeleteItem(row)} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
+        </div>
+      ),
+    },
   ];
 
   const totalKg = records.reduce((s, r) => s + (r.kg_harvested || 0), 0);
@@ -97,7 +169,7 @@ export default function Harvests() {
         title="Harvest Records"
         subtitle={`${totalKg.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg total harvested`}
         actions={
-          <Button size="sm" onClick={() => { setForm(defaultForm); setError(""); setShowModal(true); }} className="gap-1.5">
+          <Button size="sm" onClick={openCreateModal} className="gap-1.5">
             <Plus className="w-4 h-4" /> Log Harvest
           </Button>
         }
@@ -124,12 +196,12 @@ export default function Harvests() {
       )}
 
       {!loading && records.length === 0 ? (
-        <EmptyState icon={BarChart3} title="No harvest records" description="Log your first harvest to start tracking yield." action={<Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4 mr-1" />Log Harvest</Button>} />
+        <EmptyState icon={BarChart3} title="No harvest records" description="Log your first harvest to start tracking yield." action={<Button onClick={openCreateModal}><Plus className="w-4 h-4 mr-1" />Log Harvest</Button>} />
       ) : (
         <DataTable columns={columns} data={records} loading={loading} />
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Log Harvest">
+      <Modal open={showModal} onClose={closeModal} title={editItem ? "Edit Harvest" : "Log Harvest"}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Greenhouse" required>
@@ -169,13 +241,25 @@ export default function Harvests() {
           </FormField>
           {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.kg_harvested || !form.date}>
-              {saving ? "Saving…" : "Log Harvest"}
+              {saving ? "Saving…" : editItem ? "Save Changes" : "Log Harvest"}
             </Button>
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteItem}
+        onOpenChange={(open) => {
+          if (!open) setDeleteItem(null);
+        }}
+        title="Delete this harvest record?"
+        description="This harvest entry will be removed from the log. This action cannot be undone."
+        confirmLabel="Delete Harvest"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

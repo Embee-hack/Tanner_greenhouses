@@ -6,10 +6,11 @@ import StatusBadge from "@/components/shared/StatusBadge";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Leaf, ChevronDown, RotateCcw, Calendar, Sprout, TrendingUp, ListTree } from "lucide-react";
+import { Plus, Leaf, ChevronDown, Calendar, Sprout, TrendingUp, ListTree, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
@@ -42,18 +43,24 @@ export default function CropCycles() {
   const [loadError, setLoadError] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [editCycle, setEditCycle] = useState(null);
+  const [editingCropType, setEditingCropType] = useState(null);
+  const [editingVariety, setEditingVariety] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [cropTypeForm, setCropTypeForm] = useState(defaultCropTypeForm);
   const [varietyForm, setVarietyForm] = useState(defaultVarietyForm);
   const [saving, setSaving] = useState(false);
   const [savingCropType, setSavingCropType] = useState(false);
   const [savingVariety, setSavingVariety] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [catalogError, setCatalogError] = useState("");
   const [confirmAction, setConfirmAction] = useState(null); // { cycle, status }
+  const [deleteDialog, setDeleteDialog] = useState(null); // { kind, item }
 
   const load = async () => {
     try {
+      setLoading(true);
       const [cy, gh, ct, cv] = await Promise.all([
         base44.entities.CropCycle.list("-planting_date"),
         base44.entities.Greenhouse.list("code"),
@@ -95,7 +102,9 @@ export default function CropCycles() {
       return;
     }
     // Check only one active cycle per greenhouse
-    const activeCycles = cycles.filter(c => c.greenhouse_id === form.greenhouse_id && c.status === "active");
+    const activeCycles = cycles.filter(
+      (cycle) => cycle.greenhouse_id === form.greenhouse_id && cycle.status === "active" && cycle.id !== editCycle?.id
+    );
     if (activeCycles.length > 0 && form.status === "active") {
       setError("This greenhouse already has an active cycle. Complete or abandon it first.");
       return;
@@ -106,18 +115,25 @@ export default function CropCycles() {
 
     setSaving(true);
     try {
-      await base44.entities.CropCycle.create({
+      const payload = {
         ...form,
         crop_type_id: form.crop_type_id || null,
         variety_id: form.variety_id || null,
         crop_type: selectedCropType?.name || form.crop_type || "",
         variety: selectedVariety?.name || "",
         plants_planted: form.plants_planted ? parseInt(form.plants_planted) : null,
-      });
+        end_date: form.status === "active" ? null : editCycle?.end_date || new Date().toISOString().slice(0, 10),
+      };
+      if (editCycle) {
+        await base44.entities.CropCycle.update(editCycle.id, payload);
+      } else {
+        await base44.entities.CropCycle.create(payload);
+      }
       setShowModal(false);
+      setEditCycle(null);
       await load();
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to create crop cycle."));
+      setError(getErrorMessage(err, `Failed to ${editCycle ? "update" : "create"} crop cycle.`));
     } finally {
       setSaving(false);
     }
@@ -125,6 +141,7 @@ export default function CropCycles() {
 
   const openNewCycleModal = () => {
     const firstCropType = cropTypes[0];
+    setEditCycle(null);
     setForm({
       ...defaultForm,
       crop_type_id: firstCropType?.id || "",
@@ -134,18 +151,66 @@ export default function CropCycles() {
     setShowModal(true);
   };
 
+  const openEditCycleModal = (cycle) => {
+    setEditCycle(cycle);
+    setForm({
+      ...defaultForm,
+      ...cycle,
+      crop_type_id: cycle.crop_type_id || "",
+      variety_id: cycle.variety_id || "",
+      plants_planted: cycle.plants_planted != null ? String(cycle.plants_planted) : "",
+    });
+    setError("");
+    setShowModal(true);
+  };
+
+  const closeCycleModal = () => {
+    setShowModal(false);
+    setEditCycle(null);
+    setForm(defaultForm);
+    setError("");
+  };
+
   const openCatalogModal = () => {
     setCatalogError("");
+    setEditingCropType(null);
+    setEditingVariety(null);
     setCropTypeForm(defaultCropTypeForm);
     setVarietyForm({ ...defaultVarietyForm, crop_type_id: cropTypes[0]?.id || "" });
     setShowCatalogModal(true);
   };
 
-  const handleCreateCropType = async () => {
+  const closeCatalogModal = () => {
+    setShowCatalogModal(false);
+    setEditingCropType(null);
+    setEditingVariety(null);
+    setCropTypeForm(defaultCropTypeForm);
+    setVarietyForm({ ...defaultVarietyForm, crop_type_id: cropTypes[0]?.id || "" });
+    setCatalogError("");
+  };
+
+  const openEditCropType = (cropType) => {
+    setEditingCropType(cropType);
+    setCropTypeForm({ name: cropType.name || "" });
+    setCatalogError("");
+  };
+
+  const openEditVariety = (variety) => {
+    setEditingVariety(variety);
+    setVarietyForm({
+      crop_type_id: variety.crop_type_id || "",
+      name: variety.name || "",
+    });
+    setCatalogError("");
+  };
+
+  const handleSaveCropType = async () => {
     const name = String(cropTypeForm.name || "").trim();
     if (!name) return;
 
-    const exists = cropTypes.some((item) => String(item.name || "").toLowerCase() === name.toLowerCase());
+    const exists = cropTypes.some(
+      (item) => item.id !== editingCropType?.id && String(item.name || "").toLowerCase() === name.toLowerCase()
+    );
     if (exists) {
       setCatalogError("This crop type already exists.");
       return;
@@ -154,23 +219,31 @@ export default function CropCycles() {
     setCatalogError("");
     setSavingCropType(true);
     try {
-      const created = await base44.entities.CropType.create({ name });
+      let selectedCropTypeId = editingCropType?.id || "";
+      if (editingCropType) {
+        await base44.entities.CropType.update(editingCropType.id, { name });
+      } else {
+        const created = await base44.entities.CropType.create({ name });
+        selectedCropTypeId = created?.id || "";
+      }
+      setEditingCropType(null);
       setCropTypeForm(defaultCropTypeForm);
-      setVarietyForm((prev) => ({ ...prev, crop_type_id: created?.id || prev.crop_type_id }));
+      setVarietyForm((prev) => ({ ...prev, crop_type_id: selectedCropTypeId || prev.crop_type_id }));
       await load();
     } catch (err) {
-      setCatalogError(getErrorMessage(err, "Failed to create crop type."));
+      setCatalogError(getErrorMessage(err, `Failed to ${editingCropType ? "update" : "create"} crop type.`));
     } finally {
       setSavingCropType(false);
     }
   };
 
-  const handleCreateVariety = async () => {
+  const handleSaveVariety = async () => {
     const name = String(varietyForm.name || "").trim();
     if (!name || !varietyForm.crop_type_id) return;
 
     const exists = varieties.some(
       (item) =>
+        item.id !== editingVariety?.id &&
         item.crop_type_id === varietyForm.crop_type_id &&
         String(item.name || "").toLowerCase() === name.toLowerCase()
     );
@@ -182,14 +255,22 @@ export default function CropCycles() {
     setCatalogError("");
     setSavingVariety(true);
     try {
-      await base44.entities.CropVariety.create({
-        crop_type_id: varietyForm.crop_type_id,
-        name,
-      });
+      if (editingVariety) {
+        await base44.entities.CropVariety.update(editingVariety.id, {
+          crop_type_id: varietyForm.crop_type_id,
+          name,
+        });
+      } else {
+        await base44.entities.CropVariety.create({
+          crop_type_id: varietyForm.crop_type_id,
+          name,
+        });
+      }
+      setEditingVariety(null);
       setVarietyForm((prev) => ({ ...prev, name: "" }));
       await load();
     } catch (err) {
-      setCatalogError(getErrorMessage(err, "Failed to create variety."));
+      setCatalogError(getErrorMessage(err, `Failed to ${editingVariety ? "update" : "create"} variety.`));
     } finally {
       setSavingVariety(false);
     }
@@ -206,6 +287,48 @@ export default function CropCycles() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteDialog) return;
+    setDeleting(true);
+    try {
+      if (deleteDialog.kind === "cycle") {
+        await base44.entities.CropCycle.delete(deleteDialog.item.id);
+        if (editCycle?.id === deleteDialog.item.id) {
+          closeCycleModal();
+        }
+      } else if (deleteDialog.kind === "cropType") {
+        const relatedVarietyIds = varieties
+          .filter((item) => item.crop_type_id === deleteDialog.item.id)
+          .map((item) => item.id);
+        if (relatedVarietyIds.length > 0) {
+          await base44.entities.CropVariety.delete(relatedVarietyIds);
+        }
+        await base44.entities.CropType.delete(deleteDialog.item.id);
+        if (editingCropType?.id === deleteDialog.item.id) {
+          setEditingCropType(null);
+          setCropTypeForm(defaultCropTypeForm);
+        }
+      } else if (deleteDialog.kind === "variety") {
+        await base44.entities.CropVariety.delete(deleteDialog.item.id);
+        if (editingVariety?.id === deleteDialog.item.id) {
+          setEditingVariety(null);
+          setVarietyForm({ ...defaultVarietyForm, crop_type_id: cropTypes[0]?.id || "" });
+        }
+      }
+      setDeleteDialog(null);
+      await load();
+    } catch (err) {
+      const label = deleteDialog.kind === "cycle" ? "crop cycle" : deleteDialog.kind === "cropType" ? "crop type" : "variety";
+      if (deleteDialog.kind === "cycle") {
+        setError(getErrorMessage(err, `Failed to delete ${label}.`));
+      } else {
+        setCatalogError(getErrorMessage(err, `Failed to delete ${label}.`));
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const columns = [
     { key: "greenhouse_id", label: "Greenhouse", render: (v) => <span className="font-semibold">{ghMap[v]?.code ?? v}</span> },
     { key: "crop_type", label: "Crop" },
@@ -215,39 +338,37 @@ export default function CropCycles() {
     { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
     {
       key: "id", label: "Actions",
-      render: (_, row) => {
-        if (row.status === "active") {
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 hover:bg-muted transition-colors">
-                  Actions <ChevronDown className="w-3 h-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+      render: (_, row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 hover:bg-muted transition-colors">
+              Actions <ChevronDown className="w-3 h-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEditCycleModal(row)}>
+              Edit Cycle
+            </DropdownMenuItem>
+            {row.status === "active" ? (
+              <>
                 <DropdownMenuItem onClick={() => setConfirmAction({ cycle: row, status: "completed" })} className="text-primary focus:text-primary">
                   Mark as Completed
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setConfirmAction({ cycle: row, status: "abandoned" })} className="text-danger focus:text-danger">
                   Mark as Abandoned
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        }
-        if (row.status === "completed" || row.status === "abandoned") {
-          return (
-            <button
-              onClick={() => setConfirmAction({ cycle: row, status: "active" })}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1 hover:bg-muted transition-colors"
-              title="Revert to Active"
-            >
-              <RotateCcw className="w-3 h-3" /> Revert
-            </button>
-          );
-        }
-        return null;
-      }
+              </>
+            ) : (
+              <DropdownMenuItem onClick={() => setConfirmAction({ cycle: row, status: "active" })}>
+                Revert to Active
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => setDeleteDialog({ kind: "cycle", item: row })} className="text-danger focus:text-danger">
+              Delete Cycle
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
     },
   ];
 
@@ -346,7 +467,7 @@ export default function CropCycles() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Crop Cycle">
+      <Modal open={showModal} onClose={closeCycleModal} title={editCycle ? "Edit Crop Cycle" : "New Crop Cycle"}>
         <div className="space-y-4">
           {error && <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div>}
           <FormField label="Greenhouse" required>
@@ -434,29 +555,34 @@ export default function CropCycles() {
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional..." />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeCycleModal}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.crop_type_id || !form.planting_date || !form.plants_planted}>
-              {saving ? "Saving…" : "Start Cycle"}
+              {saving ? "Saving…" : editCycle ? "Save Changes" : "Start Cycle"}
             </Button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={showCatalogModal} onClose={() => setShowCatalogModal(false)} title="Manage Crops & Varieties">
+      <Modal open={showCatalogModal} onClose={closeCatalogModal} title="Manage Crops & Varieties">
         <div className="space-y-4">
           {catalogError && <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{catalogError}</div>}
 
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="New Crop Type" required>
+            <FormField label={editingCropType ? "Edit Crop Type" : "New Crop Type"} required>
               <Input
                 value={cropTypeForm.name}
                 onChange={(e) => setCropTypeForm({ name: e.target.value })}
                 placeholder="Pepper"
               />
             </FormField>
-            <div className="flex items-end">
-              <Button onClick={handleCreateCropType} disabled={savingCropType || !String(cropTypeForm.name || "").trim()}>
-                {savingCropType ? "Saving…" : "Create Crop Type"}
+            <div className="flex items-end gap-2">
+              {editingCropType ? (
+                <Button variant="outline" onClick={() => { setEditingCropType(null); setCropTypeForm(defaultCropTypeForm); }}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button onClick={handleSaveCropType} disabled={savingCropType || !String(cropTypeForm.name || "").trim()}>
+                {savingCropType ? "Saving…" : editingCropType ? "Save Crop Type" : "Create Crop Type"}
               </Button>
             </div>
           </div>
@@ -475,18 +601,23 @@ export default function CropCycles() {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="New Variety" required>
+            <FormField label={editingVariety ? "Edit Variety" : "New Variety"} required>
               <div className="flex gap-2">
                 <Input
                   value={varietyForm.name}
                   onChange={(e) => setVarietyForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Capsicum"
                 />
+                {editingVariety ? (
+                  <Button variant="outline" onClick={() => { setEditingVariety(null); setVarietyForm({ ...defaultVarietyForm, crop_type_id: cropTypes[0]?.id || "" }); }}>
+                    Cancel
+                  </Button>
+                ) : null}
                 <Button
-                  onClick={handleCreateVariety}
+                  onClick={handleSaveVariety}
                   disabled={savingVariety || !varietyForm.crop_type_id || !String(varietyForm.name || "").trim()}
                 >
-                  {savingVariety ? "Saving…" : "Add"}
+                  {savingVariety ? "Saving…" : editingVariety ? "Save" : "Add"}
                 </Button>
               </div>
             </FormField>
@@ -504,15 +635,33 @@ export default function CropCycles() {
                 );
                 return (
                   <div key={cropType.id} className="px-4 py-3">
-                    <div className="text-sm font-semibold text-foreground">{cropType.name}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm font-semibold text-foreground">{cropType.name}</div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => openEditCropType(cropType)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+                          <Pencil className="w-3 h-3" /> Edit
+                        </button>
+                        <button onClick={() => setDeleteDialog({ kind: "cropType", item: cropType })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
+                          <Trash2 className="w-3 h-3" /> Delete
+                        </button>
+                      </div>
+                    </div>
                     {cropVarieties.length === 0 ? (
                       <div className="text-xs text-muted-foreground mt-0.5">No varieties yet.</div>
                     ) : (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
+                      <div className="space-y-2 mt-2">
                         {cropVarieties.map((item) => (
-                          <span key={item.id} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
-                            {item.name}
-                          </span>
+                          <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                            <span className="text-xs text-foreground">{item.name}</span>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => openEditVariety(item)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+                                <Pencil className="w-3 h-3" /> Edit
+                              </button>
+                              <button onClick={() => setDeleteDialog({ kind: "variety", item })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -523,6 +672,36 @@ export default function CropCycles() {
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteDialog}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDialog(null);
+        }}
+        title={
+          deleteDialog?.kind === "cycle"
+            ? "Delete this crop cycle?"
+            : deleteDialog?.kind === "cropType"
+            ? "Delete this crop type?"
+            : "Delete this variety?"
+        }
+        description={
+          deleteDialog?.kind === "cycle"
+            ? "This crop cycle record will be removed. This action cannot be undone."
+            : deleteDialog?.kind === "cropType"
+            ? "This crop type will be removed. Its varieties will also be deleted."
+            : "This variety will be removed from the catalog."
+        }
+        confirmLabel={
+          deleteDialog?.kind === "cycle"
+            ? "Delete Cycle"
+            : deleteDialog?.kind === "cropType"
+            ? "Delete Crop Type"
+            : "Delete Variety"
+        }
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

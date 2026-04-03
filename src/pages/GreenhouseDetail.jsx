@@ -4,12 +4,13 @@ import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { useAuth } from "@/lib/AuthContext";
 import { getErrorMessage } from "@/lib/errors.js";
+import { formatIncidentAffectedPlants, getIncidentTitle, getIncidentTypeLabel, isIncidentActive } from "@/lib/incidents.js";
 import { isAdminUser } from "@/lib/roles.js";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
   ArrowLeft, Sprout, TrendingUp, DollarSign, Package,
-  Bug, Leaf, BarChart2, AlertTriangle, FlaskConical
+  Leaf, BarChart2, AlertTriangle, FlaskConical
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from "recharts";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,11 @@ const severityConfig = {
 };
 
 const statusDot = {
-  open: "bg-red-500", treated: "bg-amber-500", resolved: "bg-emerald-500"
+  open: "bg-red-500",
+  treated: "bg-amber-500",
+  in_progress: "bg-amber-500",
+  monitoring: "bg-blue-500",
+  resolved: "bg-emerald-500",
 };
 
 function StatBox({ label, value, icon: Icon, color }) {
@@ -112,7 +117,7 @@ export default function GreenhouseDetail() {
   const latestPop = popLogs.sort((a, b) => b.date?.localeCompare(a.date))[0];
   const activePlants = latestPop?.active_plants || activeCycle?.plants_planted || 0;
   const yieldPerPlant = activePlants > 0 ? (totalKg / activePlants).toFixed(2) : null;
-  const openIncidents = incidents.filter(i => i.status === "open" || i.status === "treated");
+  const openIncidents = incidents.filter(i => isIncidentActive(i.status));
   const populationChart = popLogs
     .slice()
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
@@ -181,19 +186,19 @@ export default function GreenhouseDetail() {
             <StatBox label="Active Plants" value={activePlants > 0 ? activePlants.toLocaleString() : "—"} icon={Sprout} color="text-green-600" />
             <StatBox label="Yield/Plant" value={yieldPerPlant ? `${yieldPerPlant} kg` : "—"} icon={BarChart2} color="text-blue-600" />
             <StatBox label="Crop Cycles" value={cycles.length} icon={Leaf} color="text-primary" />
-            <StatBox label="Open Incidents" value={openIncidents.length} icon={AlertTriangle} color={openIncidents.length > 0 ? "text-amber-600" : "text-emerald-600"} />
-            <StatBox label="Treatments" value={treatments.length} icon={FlaskConical} color="text-violet-600" />
+            <StatBox label="Active Incidents" value={openIncidents.length} icon={AlertTriangle} color={openIncidents.length > 0 ? "text-amber-600" : "text-emerald-600"} />
+            <StatBox label="Responses" value={treatments.length} icon={FlaskConical} color="text-violet-600" />
           </>
         )}
       </div>
 
-      {/* Open incidents alert */}
+      {/* Active incidents alert */}
       {openIncidents.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
           <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
-            <div className="text-sm font-semibold text-amber-800">{openIncidents.length} open incident{openIncidents.length > 1 ? "s" : ""}</div>
-            <div className="text-xs text-amber-700 mt-0.5">{openIncidents.map(i => i.name || i.incident_type).join(" · ")}</div>
+            <div className="text-sm font-semibold text-amber-800">{openIncidents.length} active incident{openIncidents.length > 1 ? "s" : ""}</div>
+            <div className="text-xs text-amber-700 mt-0.5">{openIncidents.map(i => getIncidentTitle(i)).join(" · ")}</div>
           </div>
         </div>
       )}
@@ -281,7 +286,7 @@ export default function GreenhouseDetail() {
         {/* Incidents */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-            <Bug className="w-4 h-4 text-danger" />
+            <AlertTriangle className="w-4 h-4 text-danger" />
             <h3 className="font-semibold text-sm">Incident History</h3>
             <span className="ml-auto text-xs text-muted-foreground">{incidents.length} total</span>
           </div>
@@ -296,11 +301,13 @@ export default function GreenhouseDetail() {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className={cn("w-2 h-2 rounded-full", statusDot[inc.status] || "bg-gray-400")} />
-                        <span className="text-sm font-semibold">{inc.name || inc.incident_type}</span>
+                        <span className="text-sm font-semibold">{getIncidentTitle(inc)}</span>
                       </div>
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", sev.bg, sev.text, sev.border)}>{inc.severity}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground">{inc.date} · {inc.incident_type} · {inc.affected_plants ? `${inc.affected_plants} plants` : ""}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[inc.date, getIncidentTypeLabel(inc.incident_type), formatIncidentAffectedPlants(inc)].filter(Boolean).join(" · ")}
+                    </div>
                     {inc.description && <div className="text-xs text-muted-foreground mt-0.5 truncate">{inc.description}</div>}
                   </div>
                 );
@@ -355,7 +362,7 @@ export default function GreenhouseDetail() {
           <div><span className="text-muted-foreground block text-xs">Area</span><span className="font-semibold">{gh.area ? `${gh.area.toLocaleString()} m²` : "—"}</span></div>
           <div><span className="text-muted-foreground block text-xs">Plant Capacity</span><span className="font-semibold">{gh.capacity_plants ? gh.capacity_plants.toLocaleString() : "—"}</span></div>
           <div><span className="text-muted-foreground block text-xs">Cycles</span><span className="font-semibold">{cycles.length}</span></div>
-          <div><span className="text-muted-foreground block text-xs">Treatments</span><span className="font-semibold">{treatments.length}</span></div>
+          <div><span className="text-muted-foreground block text-xs">Responses</span><span className="font-semibold">{treatments.length}</span></div>
         </div>
       </div>
     </div>

@@ -5,11 +5,12 @@ import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Thermometer } from "lucide-react";
+import { Plus, Thermometer, Pencil, Trash2 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -21,8 +22,11 @@ export default function Environmental() {
   const [greenhouses, setGreenhouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedGh, setSelectedGh] = useState(ALL_GREENHOUSES_VALUE);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -48,23 +52,73 @@ export default function Environmental() {
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
 
+  const openCreateModal = () => {
+    setEditItem(null);
+    setForm(defaultForm);
+    setError("");
+    setShowModal(true);
+  };
+
+  const openEditModal = (record) => {
+    setEditItem(record);
+    setForm({
+      ...defaultForm,
+      ...record,
+      temperature_c: record.temperature_c != null ? String(record.temperature_c) : "",
+      humidity_pct: record.humidity_pct != null ? String(record.humidity_pct) : "",
+      co2_ppm: record.co2_ppm != null ? String(record.co2_ppm) : "",
+      light_lux: record.light_lux != null ? String(record.light_lux) : "",
+    });
+    setError("");
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditItem(null);
+    setForm(defaultForm);
+    setError("");
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
-      await base44.entities.EnvironmentalLog.create({
+      const payload = {
         ...form,
         temperature_c: form.temperature_c ? parseFloat(form.temperature_c) : null,
         humidity_pct: form.humidity_pct ? parseFloat(form.humidity_pct) : null,
         co2_ppm: form.co2_ppm ? parseFloat(form.co2_ppm) : null,
         light_lux: form.light_lux ? parseFloat(form.light_lux) : null,
-      });
-      setShowModal(false);
-      load();
+      };
+      if (editItem) {
+        await base44.entities.EnvironmentalLog.update(editItem.id, payload);
+      } else {
+        await base44.entities.EnvironmentalLog.create(payload);
+      }
+      closeModal();
+      await load();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save environmental reading."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+    setDeleting(true);
+    try {
+      await base44.entities.EnvironmentalLog.delete(deleteItem.id);
+      setDeleteItem(null);
+      if (editItem?.id === deleteItem.id) {
+        closeModal();
+      }
+      await load();
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Failed to delete environmental reading."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -85,6 +139,20 @@ export default function Environmental() {
     { key: "humidity_pct", label: "Humidity (%)", align: "right", render: v => v != null ? v.toFixed(1) : "—" },
     { key: "co2_ppm", label: "CO₂ (ppm)", align: "right", render: v => v != null ? v.toFixed(0) : "—" },
     { key: "light_lux", label: "Light (lux)", align: "right", render: v => v != null ? v.toLocaleString() : "—" },
+    {
+      key: "id",
+      label: "Actions",
+      render: (_, row) => (
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => openEditModal(row)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+            <Pencil className="w-3 h-3" /> Edit
+          </button>
+          <button onClick={() => setDeleteItem(row)} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -101,7 +169,7 @@ export default function Environmental() {
                 {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={() => { setForm(defaultForm); setError(""); setShowModal(true); }} className="gap-1.5">
+            <Button size="sm" onClick={openCreateModal} className="gap-1.5">
               <Plus className="w-4 h-4" /> Log Reading
             </Button>
           </div>
@@ -129,12 +197,12 @@ export default function Environmental() {
       )}
 
       {!loading && records.length === 0 ? (
-        <EmptyState icon={Thermometer} title="No environmental logs" description="Log readings from your greenhouses." action={<Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4 mr-1" />Log Reading</Button>} />
+        <EmptyState icon={Thermometer} title="No environmental logs" description="Log readings from your greenhouses." action={<Button onClick={openCreateModal}><Plus className="w-4 h-4 mr-1" />Log Reading</Button>} />
       ) : (
         <DataTable columns={columns} data={filtered} loading={loading} />
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Log Environmental Reading">
+      <Modal open={showModal} onClose={closeModal} title={editItem ? "Edit Environmental Reading" : "Log Environmental Reading"}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Greenhouse" required>
@@ -171,13 +239,25 @@ export default function Environmental() {
           </FormField>
           {error ? <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div> : null}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.greenhouse_id || !form.date}>
-              {saving ? "Saving…" : "Log Reading"}
+              {saving ? "Saving…" : editItem ? "Save Changes" : "Log Reading"}
             </Button>
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteItem}
+        onOpenChange={(open) => {
+          if (!open) setDeleteItem(null);
+        }}
+        title="Delete this environmental reading?"
+        description="This reading will be removed from the log. This action cannot be undone."
+        confirmLabel="Delete Reading"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

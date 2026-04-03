@@ -61,6 +61,8 @@ import Inventory from './pages/Inventory';
 import Sales from './pages/Sales';
 import Treatments from './pages/Treatments';
 import UserManagement from './pages/UserManagement';
+import WorkerAttendance from './pages/WorkerAttendance';
+import WorkerGrievances from './pages/WorkerGrievances';
 import Workers from './pages/Workers';
 import __Layout from './Layout.jsx';
 
@@ -80,6 +82,8 @@ export const PAGES = {
     "Sales": Sales,
     "Treatments": Treatments,
     "UserManagement": UserManagement,
+    "WorkerAttendance": WorkerAttendance,
+    "WorkerGrievances": WorkerGrievances,
     "Workers": Workers,
 }
 
