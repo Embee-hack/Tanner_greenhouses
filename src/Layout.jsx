@@ -10,7 +10,6 @@ import {
   DollarSign,
   Bug,
   AlertTriangle,
-  Thermometer,
   GitCompare,
   Menu,
   X,
@@ -54,7 +53,6 @@ const groupedNav = [
     items: [
       { label: "Incident Log", icon: AlertTriangle, page: "Incidents" },
       { label: "Response Log", icon: FlaskConical, page: "Treatments" },
-      { label: "Environment", icon: Thermometer, page: "Environmental" },
     ],
   },
   {

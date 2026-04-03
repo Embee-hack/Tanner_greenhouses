@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
 import PageHeader from "@/components/shared/PageHeader";
-import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +58,13 @@ const CATEGORY_COLORS = {
   other: "bg-muted text-muted-foreground border-border",
 };
 
+const getExpenseSelectionState = (rows, selectedIds) => {
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+  const someSelected = ids.some((id) => selectedIds.includes(id)) && !allSelected;
+  return allSelected ? true : someSelected ? "indeterminate" : false;
+};
+
 export default function Expenses() {
   const { fmt, symbol } = useCurrency();
   const { user } = useAuth();
@@ -75,6 +82,7 @@ export default function Expenses() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [expandedDates, setExpandedDates] = useState([]);
 
   const load = async () => {
     try {
@@ -161,18 +169,18 @@ export default function Expenses() {
     }
   };
 
-  const toggleSelectAll = (checked) => {
-    const pageIds = records.map(r => r.id).filter(Boolean);
-    if (checked) {
-      setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
-    } else {
-      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
-    }
-  };
-
   const toggleSelectOne = (id, checked) => {
     if (!id) return;
     setSelectedIds(prev => checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter(i => i !== id));
+  };
+
+  const toggleSelectGroup = (rows, checked) => {
+    const ids = rows.map((row) => row.id).filter(Boolean);
+    if (checked) {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...ids])));
+      return;
+    }
+    setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
   };
 
   const requestDeleteSingle = (id) => { if (id) setDeleteDialog({ mode: "single", ids: [id] }); };
@@ -195,6 +203,62 @@ export default function Expenses() {
     }
   };
 
+  const sortedRecords = useMemo(() => {
+    const sorted = [...records];
+    sorted.sort((a, b) => {
+      const dateCompare = String(b.date || "").localeCompare(String(a.date || ""));
+      if (dateCompare !== 0) return dateCompare;
+
+      const loggedCompare = String(b.created_date || b.updated_date || "").localeCompare(String(a.created_date || a.updated_date || ""));
+      if (loggedCompare !== 0) return loggedCompare;
+
+      return Number(b.amount || 0) - Number(a.amount || 0);
+    });
+    return sorted;
+  }, [records]);
+
+  const groupedRecords = useMemo(() => {
+    const groups = new Map();
+
+    sortedRecords.forEach((row) => {
+      const dateKey = String(row.date || "__undated__");
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, {
+          date: dateKey,
+          rows: [],
+          totalAmount: 0,
+          categoryTotals: {},
+        });
+      }
+
+      const group = groups.get(dateKey);
+      group.rows.push(row);
+      group.totalAmount += Number(row.amount || 0);
+      group.categoryTotals[row.category] = (group.categoryTotals[row.category] || 0) + Number(row.amount || 0);
+    });
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      topCategories: Object.entries(group.categoryTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name]) => name),
+    }));
+  }, [sortedRecords]);
+
+  useEffect(() => {
+    const visibleIds = sortedRecords.map((row) => row.id).filter(Boolean);
+    setSelectedIds((prev) => prev.filter((id) => visibleIds.includes(id)));
+  }, [sortedRecords]);
+
+  useEffect(() => {
+    setExpandedDates((current) => {
+      const validDates = current.filter((value) => groupedRecords.some((group) => group.date === value));
+      if (validDates.length > 0) return validDates;
+      return groupedRecords.length > 0 ? [groupedRecords[0].date] : [];
+    });
+  }, [groupedRecords]);
+
   // Category breakdown pie
   const catMap = {};
   records.forEach(r => {
@@ -203,116 +267,6 @@ export default function Expenses() {
   const pieData = Object.entries(catMap).map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }));
 
   const totalExpenses = records.reduce((s, r) => s + (r.amount || 0), 0);
-
-  const allIds = records.map(r => r.id).filter(Boolean);
-  const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.includes(id));
-  const someSelected = allIds.some(id => selectedIds.includes(id)) && !allSelected;
-
-  const columns = [
-    {
-      key: "__select",
-      label: (
-        <div className="flex items-center">
-          <Checkbox
-            checked={allSelected ? true : someSelected ? "indeterminate" : false}
-            onCheckedChange={checked => toggleSelectAll(checked === true)}
-            aria-label="Select all"
-          />
-        </div>
-      ),
-      render: (_, row) => (
-        <div className="flex items-center">
-          <Checkbox
-            checked={selectedIds.includes(row.id)}
-            onCheckedChange={checked => toggleSelectOne(row.id, checked === true)}
-            aria-label={`Select expense ${row.id}`}
-          />
-        </div>
-      ),
-    },
-    {
-      key: "date",
-      label: "Date",
-      render: v => (
-        <span className="text-sm text-foreground font-medium whitespace-nowrap">{formatExpenseDate(v)}</span>
-      ),
-    },
-    {
-      key: "category",
-      label: "Category",
-      render: v => {
-        const catClass = CATEGORY_COLORS[v] || CATEGORY_COLORS.other;
-        return (
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${catClass}`}>
-            {v?.replace(/_/g, " ") || "—"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "greenhouse_id",
-      label: "Greenhouse",
-      render: v => v
-        ? <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-medium">{ghMap[v]?.code ?? v}</span>
-        : <span className="text-xs text-muted-foreground italic">Shared</span>,
-    },
-    {
-      key: "amount",
-      label: "Amount",
-      align: "right",
-      render: v => <span className="font-bold text-foreground">{fmt(v, 2)}</span>,
-    },
-    {
-      key: "description",
-      label: "Description",
-      render: v => v
-        ? <span className="text-sm text-muted-foreground">{v}</span>
-        : <span className="text-muted-foreground/50">—</span>,
-    },
-    {
-      key: "id",
-      label: "",
-      align: "right",
-      render: (_, row) => (
-        <div className="flex justify-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={e => e.stopPropagation()}
-                aria-label="Open expense actions"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onSelect={() => openEdit(row)}>
-                <Pencil className="w-4 h-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => handleDuplicate(row)}
-                disabled={duplicatingId === row.id || deleting}
-              >
-                <Copy className="w-4 h-4" />
-                {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => requestDeleteSingle(row.id)}
-                disabled={deleting}
-                className="text-danger focus:text-danger"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
-    },
-  ];
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -376,7 +330,140 @@ export default function Expenses() {
       {!loading && records.length === 0 ? (
         <EmptyState icon={DollarSign} title="No expenses recorded" description="Track your farm expenses." action={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" />Add Expense</Button>} />
       ) : (
-        <DataTable columns={columns} data={records} loading={loading} />
+        <Accordion type="multiple" value={expandedDates} onValueChange={setExpandedDates} className="space-y-3">
+          {groupedRecords.map((group) => (
+            <AccordionItem key={group.date} value={group.date} className="rounded-2xl border border-border bg-card px-4">
+              <div className="flex items-start gap-3">
+                <div className="pt-4" onClick={(event) => event.stopPropagation()}>
+                  <Checkbox
+                    checked={getExpenseSelectionState(group.rows, selectedIds)}
+                    onCheckedChange={(checked) => toggleSelectGroup(group.rows, checked === true)}
+                    aria-label={`Select expenses for ${formatExpenseDate(group.date)}`}
+                  />
+                </div>
+                <AccordionTrigger className="py-4 hover:no-underline">
+                  <div className="flex flex-1 flex-col gap-3 text-left md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-base font-semibold text-foreground">{formatExpenseDate(group.date)}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {group.rows.length} expense record{group.rows.length === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 md:items-end">
+                      <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
+                        <div className="text-[11px] text-muted-foreground">Total Spent</div>
+                        <div className="text-sm font-semibold text-foreground">{fmt(group.totalAmount, 2)}</div>
+                      </div>
+                      {group.topCategories.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 justify-start md:justify-end">
+                          {group.topCategories.map((category) => {
+                            const catClass = CATEGORY_COLORS[category] || CATEGORY_COLORS.other;
+                            return (
+                              <span key={category} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${catClass}`}>
+                                {category.replace(/_/g, " ")}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+              </div>
+              <AccordionContent className="pl-11">
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="px-4 py-3 w-10" />
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Category</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Greenhouse</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Description</th>
+                        <th className="px-4 py-3 w-12" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.rows.map((row) => {
+                        const catClass = CATEGORY_COLORS[row.category] || CATEGORY_COLORS.other;
+                        return (
+                          <tr key={row.id} className="border-b border-border/50 last:border-b-0">
+                            <td className="px-4 py-3">
+                              <Checkbox
+                                checked={selectedIds.includes(row.id)}
+                                onCheckedChange={(checked) => toggleSelectOne(row.id, checked === true)}
+                                aria-label={`Select expense ${row.id}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${catClass}`}>
+                                {row.category?.replace(/_/g, " ") || "—"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {row.greenhouse_id ? (
+                                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-medium">{ghMap[row.greenhouse_id]?.code ?? row.greenhouse_id}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">Shared</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="font-bold text-foreground">{fmt(row.amount, 2)}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {row.description ? (
+                                <span className="text-sm text-muted-foreground">{row.description}</span>
+                              ) : (
+                                <span className="text-muted-foreground/50">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      aria-label="Open expense actions"
+                                    >
+                                      <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40">
+                                    <DropdownMenuItem onSelect={() => openEdit(row)}>
+                                      <Pencil className="w-4 h-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => handleDuplicate(row)}
+                                      disabled={duplicatingId === row.id || deleting}
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                      {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => requestDeleteSingle(row.id)}
+                                      disabled={deleting}
+                                      className="text-danger focus:text-danger"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       )}
 
       {selectedIds.length > 0 && (

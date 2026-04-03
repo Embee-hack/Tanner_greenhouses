@@ -3,7 +3,6 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
 import PageHeader from "@/components/shared/PageHeader";
-import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,6 @@ const formatSaleDate = (dateStr) => {
   }
 };
 
-const PAGE_SIZE = 20;
 const SHARED_GREENHOUSE_VALUE = "__shared__";
 
 const defaultForm = {
@@ -128,6 +127,16 @@ const buildItemColorMap = (labels) => {
   return map;
 };
 
+const getSalesRowDateValue = (row) =>
+  String(row?.created_date || row?.updated_date || row?.date || "");
+
+const getDailyGroupSelectionState = (rows, selectedIds) => {
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+  const someSelected = ids.some((id) => selectedIds.includes(id)) && !allSelected;
+  return allSelected ? true : someSelected ? "indeterminate" : false;
+};
+
 export default function Sales() {
   const { fmt, symbol } = useCurrency();
   const { user } = useAuth();
@@ -149,9 +158,9 @@ export default function Sales() {
   const [loadError, setLoadError] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [productFilter, setProductFilter] = useState("__all__");
-  const [sortBy, setSortBy] = useState("month_desc");
+  const [sortBy, setSortBy] = useState("date_desc");
   const [chartMetric, setChartMetric] = useState("kg");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [expandedDates, setExpandedDates] = useState([]);
 
   const load = async () => {
     try {
@@ -209,56 +218,79 @@ export default function Sales() {
   const sortedRecords = useMemo(() => {
     const sorted = [...filteredRecords];
     sorted.sort((a, b) => {
-      const monthA = String(a.date || "").slice(0, 7);
-      const monthB = String(b.date || "").slice(0, 7);
+      const dateA = String(a.date || "");
+      const dateB = String(b.date || "");
+      const loggedCompare = getSalesRowDateValue(b).localeCompare(getSalesRowDateValue(a));
 
-      if (sortBy === "month_desc") {
-        if (monthA !== monthB) return monthB.localeCompare(monthA);
-        return String(b.date || "").localeCompare(String(a.date || ""));
+      if (sortBy === "date_desc") {
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return loggedCompare;
       }
-      if (sortBy === "month_asc") {
-        if (monthA !== monthB) return monthA.localeCompare(monthB);
-        return String(a.date || "").localeCompare(String(b.date || ""));
+      if (sortBy === "date_asc") {
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+        return loggedCompare;
       }
       if (sortBy === "product_az") {
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
         const itemCompare = getItemLabel(a).localeCompare(getItemLabel(b));
         if (itemCompare !== 0) return itemCompare;
-        return String(b.date || "").localeCompare(String(a.date || ""));
+        return loggedCompare;
       }
       if (sortBy === "product_za") {
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
         const itemCompare = getItemLabel(b).localeCompare(getItemLabel(a));
         if (itemCompare !== 0) return itemCompare;
-        return String(b.date || "").localeCompare(String(a.date || ""));
+        return loggedCompare;
       }
 
       return 0;
     });
     return sorted;
   }, [filteredRecords, sortBy]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedRecords.length / PAGE_SIZE));
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [monthFilter, productFilter, sortBy]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
-
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageEnd = pageStart + PAGE_SIZE;
-  const paginatedRecords = sortedRecords.slice(pageStart, pageEnd);
-
-  const currentPageIds = paginatedRecords.map((r) => r.id).filter(Boolean);
   const filteredIds = sortedRecords.map((r) => r.id).filter(Boolean);
-  const allVisibleSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.includes(id));
-  const hasSomeSelected = currentPageIds.some((id) => selectedIds.includes(id)) && !allVisibleSelected;
   const filtersActive = Boolean(monthFilter) || productFilter !== "__all__";
 
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => filteredIds.includes(id)));
   }, [sortedRecords]);
+
+  const groupedRecords = useMemo(() => {
+    const groups = new Map();
+
+    sortedRecords.forEach((row) => {
+      const dateKey = String(row.date || "__undated__");
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, {
+          date: dateKey,
+          rows: [],
+          totalKg: 0,
+          totalRevenue: 0,
+          buyers: new Set(),
+        });
+      }
+
+      const group = groups.get(dateKey);
+      group.rows.push(row);
+      group.totalKg += Number(row.kg_sold || 0);
+      group.totalRevenue += Number(row.revenue || (row.kg_sold || 0) * (row.price_per_kg || 0));
+      if (String(row.buyer || "").trim()) {
+        group.buyers.add(String(row.buyer).trim());
+      }
+    });
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      buyerCount: group.buyers.size,
+    }));
+  }, [sortedRecords]);
+
+  useEffect(() => {
+    setExpandedDates((current) => {
+      const validDates = current.filter((value) => groupedRecords.some((group) => group.date === value));
+      if (validDates.length > 0) return validDates;
+      return groupedRecords.length > 0 ? [groupedRecords[0].date] : [];
+    });
+  }, [groupedRecords]);
 
   const getCropTypeIdByName = (name) =>
     cropTypes.find((item) => String(item.name || "").toLowerCase() === String(name || "").toLowerCase())?.id || "";
@@ -355,19 +387,6 @@ export default function Sales() {
     }
   };
 
-  const toggleSelectAll = (checked) => {
-    if (checked) {
-      setSelectedIds((prev) => {
-        const set = new Set(prev);
-        currentPageIds.forEach((id) => set.add(id));
-        return Array.from(set);
-      });
-      return;
-    }
-
-    setSelectedIds((prev) => prev.filter((id) => !currentPageIds.includes(id)));
-  };
-
   const toggleSelectOne = (id, checked) => {
     if (!id) return;
     setSelectedIds((prev) => {
@@ -377,6 +396,15 @@ export default function Sales() {
       }
       return prev.filter((item) => item !== id);
     });
+  };
+
+  const toggleSelectGroup = (rows, checked) => {
+    const ids = rows.map((row) => row.id).filter(Boolean);
+    if (checked) {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...ids])));
+      return;
+    }
+    setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
   };
 
   const requestDeleteSingle = (id) => {
@@ -489,158 +517,6 @@ export default function Sales() {
         totalRevenue: Number(point.totalRevenue.toFixed(2)),
       }));
   }, [sortedRecords, itemSeries]);
-
-  const columns = [
-    {
-      key: "__select",
-      label: (
-        <div className="flex items-center">
-          <Checkbox
-            checked={allVisibleSelected ? true : hasSomeSelected ? "indeterminate" : false}
-            onCheckedChange={(checked) => toggleSelectAll(checked === true)}
-            aria-label="Select all sales on this page"
-          />
-        </div>
-      ),
-      render: (_, row) => (
-        <div className="flex items-center">
-          <Checkbox
-            checked={selectedIds.includes(row.id)}
-            onCheckedChange={(checked) => toggleSelectOne(row.id, checked === true)}
-            aria-label={`Select sale ${row.id}`}
-          />
-        </div>
-      ),
-    },
-    {
-      key: "date",
-      label: "Date",
-      render: (v) => (
-        <span className="text-sm text-foreground font-medium whitespace-nowrap">
-          {formatSaleDate(v)}
-        </span>
-      ),
-    },
-    {
-      key: "buyer",
-      label: "Buyer",
-      render: (v) => (
-        <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-            {String(v || "?")[0].toUpperCase()}
-          </span>
-          <span className="text-sm text-foreground">{v || "—"}</span>
-        </div>
-      ),
-    },
-    {
-      key: "crop_type",
-      label: "Item Sold",
-      render: (_, row) => {
-        const label = getItemLabel(row);
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
-            {label}
-          </span>
-        );
-      },
-    },
-    {
-      key: "greenhouse_id",
-      label: "Greenhouse",
-      render: (v) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground">
-          {v ? (ghMap[v]?.code ?? v) : "All"}
-        </span>
-      ),
-    },
-    {
-      key: "kg_sold",
-      label: "kg Sold",
-      align: "right",
-      render: (v) => (
-        <span className="text-sm font-medium text-foreground">
-          {v != null ? v.toFixed(1) : "—"} <span className="text-xs text-muted-foreground font-normal">kg</span>
-        </span>
-      ),
-    },
-    {
-      key: "price_per_kg",
-      label: `${symbol}/kg`,
-      align: "right",
-      render: (v) => (
-        <span className="text-sm text-muted-foreground">{fmt(v, 2)}</span>
-      ),
-    },
-    {
-      key: "revenue",
-      label: "Revenue",
-      align: "right",
-      render: (v, row) => (
-        <span className="text-sm font-bold text-foreground">
-          {fmt(v || row.kg_sold * row.price_per_kg || 0, 2)}
-        </span>
-      ),
-    },
-    {
-      key: "id",
-      label: "",
-      align: "right",
-      render: (_, row) => (
-        <div className="flex justify-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={(e) => e.stopPropagation()}
-                aria-label="Open sale actions"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem
-                onSelect={() => openEdit(row)}
-              >
-                <Pencil className="w-4 h-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => handleDuplicate(row)}
-                disabled={duplicatingId === row.id || deleting}
-              >
-                <Copy className="w-4 h-4" />
-                {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => requestDeleteSingle(row.id)}
-                disabled={deleting}
-                className="text-danger focus:text-danger"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
-    },
-  ];
-
-  const startItem = sortedRecords.length === 0 ? 0 : pageStart + 1;
-  const endItem = Math.min(pageEnd, sortedRecords.length);
-
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    if (currentPage <= 3) return [1, 2, 3, 4, 5];
-    if (currentPage >= totalPages - 2) return [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    return [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2];
-  }, [currentPage, totalPages]);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -787,10 +663,10 @@ export default function Sales() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="month_desc">Month: latest first</SelectItem>
-                <SelectItem value="month_asc">Month: oldest first</SelectItem>
-                <SelectItem value="product_az">Product: A to Z</SelectItem>
-                <SelectItem value="product_za">Product: Z to A</SelectItem>
+                <SelectItem value="date_desc">Date: newest first</SelectItem>
+                <SelectItem value="date_asc">Date: oldest first</SelectItem>
+                <SelectItem value="product_az">Item within day: A to Z</SelectItem>
+                <SelectItem value="product_za">Item within day: Z to A</SelectItem>
               </SelectContent>
             </Select>
           </FormField>
@@ -799,9 +675,9 @@ export default function Sales() {
             onClick={() => {
               setMonthFilter("");
               setProductFilter("__all__");
-              setSortBy("month_desc");
+              setSortBy("date_desc");
             }}
-            disabled={!filtersActive && sortBy === "month_desc"}
+            disabled={!filtersActive && sortBy === "date_desc"}
           >
             Reset
           </Button>
@@ -838,62 +714,147 @@ export default function Sales() {
           description="Record your first sale."
           action={<Button onClick={openCreate}><Plus className="w-4 h-4 mr-1" />Record Sale</Button>}
         />
+      ) : !loading && groupedRecords.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card px-5 py-10 text-center">
+          <div className="text-base font-semibold text-foreground">No sales match these filters</div>
+          <div className="text-sm text-muted-foreground mt-1">Try another month or item, or reset the log filters.</div>
+        </div>
       ) : (
         <div className="space-y-3">
-          <DataTable columns={columns} data={paginatedRecords} loading={loading} />
-
-          {!loading && sortedRecords.length > 0 && (
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-1">
-              <p className="text-sm text-muted-foreground">
-                Showing {startItem}–{endItem} of {sortedRecords.length}
-              </p>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </Button>
-
-                {pageNumbers[0] > 1 && (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(1)}>1</Button>
-                    <span className="text-muted-foreground px-1">...</span>
-                  </>
-                )}
-
-                {pageNumbers.map((page) => (
-                  <Button
-                    key={page}
-                    size="sm"
-                    variant={page === currentPage ? "default" : "ghost"}
-                    onClick={() => setCurrentPage(page)}
-                  >
-                    {page}
-                  </Button>
-                ))}
-
-                {pageNumbers[pageNumbers.length - 1] < totalPages && (
-                  <>
-                    <span className="text-muted-foreground px-1">...</span>
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages)}>{totalPages}</Button>
-                  </>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
+          <Accordion type="multiple" value={expandedDates} onValueChange={setExpandedDates} className="space-y-3">
+            {groupedRecords.map((group) => (
+              <AccordionItem key={group.date} value={group.date} className="rounded-2xl border border-border bg-card px-4">
+                <div className="flex items-start gap-3">
+                  <div className="pt-4" onClick={(event) => event.stopPropagation()}>
+                    <Checkbox
+                      checked={getDailyGroupSelectionState(group.rows, selectedIds)}
+                      onCheckedChange={(checked) => toggleSelectGroup(group.rows, checked === true)}
+                      aria-label={`Select sales for ${formatSaleDate(group.date)}`}
+                    />
+                  </div>
+                  <AccordionTrigger className="py-4 hover:no-underline">
+                    <div className="flex flex-1 flex-col gap-3 text-left md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="text-base font-semibold text-foreground">{formatSaleDate(group.date)}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {group.rows.length} sale record{group.rows.length === 1 ? "" : "s"} · {group.buyerCount} buyer{group.buyerCount === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+                        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
+                          <div className="text-[11px] text-muted-foreground">Total Sold</div>
+                          <div className="text-sm font-semibold text-foreground">{group.totalKg.toFixed(1)} kg</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
+                          <div className="text-[11px] text-muted-foreground">Revenue</div>
+                          <div className="text-sm font-semibold text-foreground">{fmt(group.totalRevenue, 2)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                </div>
+                <AccordionContent className="pl-11">
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40">
+                          <th className="px-4 py-3 w-10" />
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Buyer</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Item Sold</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Greenhouse</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">kg Sold</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{symbol}/kg</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Revenue</th>
+                          <th className="px-4 py-3 w-12" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.rows.map((row) => (
+                          <tr key={row.id} className="border-b border-border/50 last:border-b-0">
+                            <td className="px-4 py-3">
+                              <Checkbox
+                                checked={selectedIds.includes(row.id)}
+                                onCheckedChange={(checked) => toggleSelectOne(row.id, checked === true)}
+                                aria-label={`Select sale ${row.id}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                  {String(row.buyer || "?")[0].toUpperCase()}
+                                </span>
+                                <span className="text-sm text-foreground">{row.buyer || "—"}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                                {getItemLabel(row)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground">
+                                {row.greenhouse_id ? (ghMap[row.greenhouse_id]?.code ?? row.greenhouse_id) : "All"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-sm font-medium text-foreground">
+                                {row.kg_sold != null ? Number(row.kg_sold).toFixed(1) : "—"} <span className="text-xs text-muted-foreground font-normal">kg</span>
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-sm text-muted-foreground">{fmt(row.price_per_kg, 2)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-sm font-bold text-foreground">
+                                {fmt(row.revenue || row.kg_sold * row.price_per_kg || 0, 2)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      aria-label="Open sale actions"
+                                    >
+                                      <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40">
+                                    <DropdownMenuItem onSelect={() => openEdit(row)}>
+                                      <Pencil className="w-4 h-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => handleDuplicate(row)}
+                                      disabled={duplicatingId === row.id || deleting}
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                      {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => requestDeleteSingle(row.id)}
+                                      disabled={deleting}
+                                      className="text-danger focus:text-danger"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
       )}
 

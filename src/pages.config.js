@@ -50,7 +50,6 @@
 import Compare from './pages/Compare';
 import CropCycles from './pages/CropCycles';
 import Dashboard from './pages/Dashboard';
-import Environmental from './pages/Environmental';
 import Expenses from './pages/Expenses';
 import FarmCalendar from './pages/FarmCalendar';
 import GreenhouseDetail from './pages/GreenhouseDetail';
@@ -71,7 +70,6 @@ export const PAGES = {
     "Compare": Compare,
     "CropCycles": CropCycles,
     "Dashboard": Dashboard,
-    "Environmental": Environmental,
     "Expenses": Expenses,
     "FarmCalendar": FarmCalendar,
     "GreenhouseDetail": GreenhouseDetail,

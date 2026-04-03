@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   Activity,
   AlertTriangle,
@@ -80,14 +81,15 @@ const normalizeAction = (action) =>
 const sortByDateDesc = (rows) =>
   [...rows].sort((a, b) => String(b.created_date || "").localeCompare(String(a.created_date || "")));
 
-const PAGE_SIZE = 10;
+const formatActivityCount = (count) => `${count} activit${count === 1 ? "y" : "ies"}`;
 
 export default function ActivityFeed() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pulse, setPulse] = useState(false);
   const [error, setError] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [expandedDays, setExpandedDays] = useState([]);
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false);
 
   const load = async () => {
     try {
@@ -126,17 +128,54 @@ export default function ActivityFeed() {
     return unsubscribe;
   }, []);
 
-  const visibleLogs = logs.slice(0, visibleCount);
-
   const grouped = useMemo(() => {
-    const groups = {};
-    visibleLogs.forEach((log) => {
-      const dayLabel = formatDayLabel(log.created_date || log.updated_date);
-      if (!groups[dayLabel]) groups[dayLabel] = [];
-      groups[dayLabel].push(log);
+    const groups = new Map();
+    logs.forEach((log) => {
+      const timestamp = log.created_date || log.updated_date;
+      const dateKey = String(timestamp || "").slice(0, 10) || `unknown-${log.id}`;
+
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, {
+          dateKey,
+          dayLabel: formatDayLabel(timestamp),
+          items: [],
+          entityLabels: new Set(),
+        });
+      }
+
+      const group = groups.get(dateKey);
+      group.items.push(log);
+      if (log.entity) {
+        const label = ENTITY_CONFIG[log.entity]?.label || log.entity;
+        group.entityLabels.add(label);
+      }
     });
-    return groups;
-  }, [visibleLogs]);
+
+    return Array.from(groups.values()).map((group) => {
+      const entityPreview = Array.from(group.entityLabels).slice(0, 3);
+      return {
+        ...group,
+        entityPreview,
+        remainingEntityCount: Math.max(0, group.entityLabels.size - entityPreview.length),
+      };
+    });
+  }, [logs]);
+
+  useEffect(() => {
+    setExpandedDays((current) => current.filter((value) => grouped.some((group) => group.dateKey === value)));
+  }, [grouped]);
+
+  useEffect(() => {
+    if (!hasAutoExpanded && grouped.length > 0) {
+      setExpandedDays([grouped[0].dateKey]);
+      setHasAutoExpanded(true);
+      return;
+    }
+
+    if (grouped.length === 0 && hasAutoExpanded) {
+      setHasAutoExpanded(false);
+    }
+  }, [grouped, hasAutoExpanded]);
 
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">
@@ -172,57 +211,67 @@ export default function ActivityFeed() {
         ) : logs.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm">No activity recorded yet.</div>
         ) : (
-          Object.entries(grouped).map(([day, dayItems]) => (
-            <div key={day}>
-              <div className="px-5 py-2 bg-muted/40">
-                <span className="text-[10px] font-bold text-muted-foreground tracking-widest">{day}</span>
-              </div>
-              {dayItems.map((log) => {
-                const entityCfg = ENTITY_CONFIG[log.entity] || {
-                  icon: Activity,
-                  color: "bg-muted text-foreground",
-                  label: log.entity || "Activity",
-                };
-                const actionBadge = ACTION_BADGE[log.action] || "bg-muted text-muted-foreground border-border";
-                const Icon = entityCfg.icon;
-                const actor = log.actor_name || log.actor_email || "System";
-                return (
-                  <div key={log.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
-                    <div className={cn("w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5", entityCfg.color)}>
-                      <Icon className="w-4 h-4" />
+          <Accordion type="multiple" value={expandedDays} onValueChange={setExpandedDays}>
+            {grouped.map((group) => (
+              <AccordionItem key={group.dateKey} value={group.dateKey} className="border-b-0">
+                <AccordionTrigger className="px-5 py-3 bg-muted/40 hover:no-underline">
+                  <div className="flex flex-1 flex-col gap-2 text-left md:flex-row md:items-center md:justify-between pr-3">
+                    <div>
+                      <div className="text-[10px] font-bold text-muted-foreground tracking-widest">{group.dayLabel}</div>
+                      <div className="text-sm font-medium text-foreground mt-1">{formatActivityCount(group.items.length)}</div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground leading-snug">{log.summary || "Activity recorded"}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        By {actor}
-                        {log.details ? ` • ${log.details}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", actionBadge)}>
-                        {normalizeAction(log.action)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">{entityCfg.label}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatTimeLabel(log.created_date || log.updated_date)}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.entityPreview.map((label) => (
+                        <span key={label} className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-card text-muted-foreground border-border">
+                          {label}
+                        </span>
+                      ))}
+                      {group.remainingEntityCount > 0 ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-card text-muted-foreground border-border">
+                          +{group.remainingEntityCount} more
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ))
+                </AccordionTrigger>
+                <AccordionContent className="pb-0">
+                  {group.items.map((log) => {
+                    const entityCfg = ENTITY_CONFIG[log.entity] || {
+                      icon: Activity,
+                      color: "bg-muted text-foreground",
+                      label: log.entity || "Activity",
+                    };
+                    const actionBadge = ACTION_BADGE[log.action] || "bg-muted text-muted-foreground border-border";
+                    const Icon = entityCfg.icon;
+                    const actor = log.actor_name || log.actor_email || "System";
+                    return (
+                      <div key={log.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
+                        <div className={cn("w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5", entityCfg.color)}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground leading-snug">{log.summary || "Activity recorded"}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            By {actor}
+                            {log.details ? ` • ${log.details}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", actionBadge)}>
+                            {normalizeAction(log.action)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">{entityCfg.label}</span>
+                          <span className="text-[10px] text-muted-foreground">{formatTimeLabel(log.created_date || log.updated_date)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         )}
       </div>
-
-      {!loading && !error && visibleCount < logs.length && (
-        <div className="px-5 py-3 border-t border-border">
-          <button
-            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-            className="w-full text-xs font-semibold text-primary hover:text-primary/80 py-1 transition-colors"
-          >
-            Show more ({Math.min(PAGE_SIZE, logs.length - visibleCount)} more)
-          </button>
-        </div>
-      )}
     </div>
   );
 }
