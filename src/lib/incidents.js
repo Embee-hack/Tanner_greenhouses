@@ -26,6 +26,9 @@ export function getIncidentTitle(incident) {
   const explicitName = String(incident?.name || "").trim();
   if (explicitName) return explicitName;
 
+  const trigger = String(incident?.trigger || "").trim();
+  if (trigger) return trigger;
+
   switch (String(incident?.incident_type || "").trim().toLowerCase()) {
     case "pest":
       return "Pest issue";
