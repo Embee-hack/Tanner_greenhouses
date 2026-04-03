@@ -86,6 +86,12 @@ const sanitizeEntityInputForUser = (user, entity, data) => {
   if (!isObject(data)) return {};
 
   const input = { ...data };
+  delete input.created_by;
+  delete input.created_by_name;
+  delete input.created_by_email;
+  delete input.updated_by;
+  delete input.updated_by_name;
+  delete input.updated_by_email;
 
   if (!isAdmin(user) && entity === "Worker") {
     delete input.salary;
@@ -268,6 +274,37 @@ const humanizeEntity = (entity) =>
 const sanitizeText = (value, maxLen = 180) => {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
+};
+
+const getUserDisplayName = (user) =>
+  sanitizeText(user?.full_name || user?.email, 120) || null;
+
+const buildUserDisplayMap = (users) =>
+  new Map(
+    users
+      .filter((user) => String(user?.email || "").trim())
+      .map((user) => [String(user.email).trim().toLowerCase(), getUserDisplayName(user)])
+  );
+
+const attachUserDisplayFields = (data, userDisplayMap) => {
+  if (!isObject(data)) return data;
+
+  const output = { ...data };
+  for (const field of ["created_by", "updated_by"]) {
+    const rawValue = String(output[field] || "").trim();
+    if (!rawValue) continue;
+
+    const isEmail = rawValue.includes("@");
+    const resolvedName = isEmail ? userDisplayMap.get(rawValue.toLowerCase()) : rawValue;
+    if (resolvedName) {
+      output[`${field}_name`] = resolvedName;
+    }
+    if (isEmail) {
+      output[`${field}_email`] = rawValue.toLowerCase();
+    }
+  }
+
+  return output;
 };
 
 const getEntityLabel = (entity, data) => {
@@ -891,8 +928,14 @@ app.get("/api/entities/:entity", requireAuth, async (req, res) => {
     return res.json(limit ? sorted.slice(0, limit) : sorted);
   }
 
-  const rows = await prisma.entityRecord.findMany({ where: { entity } });
-  const items = rows.map((row) => sanitizeEntityDataForUser(req.user, entity, toEntityOutput(row)));
+  const [rows, users] = await Promise.all([
+    prisma.entityRecord.findMany({ where: { entity } }),
+    prisma.user.findMany({ select: { email: true, full_name: true } }),
+  ]);
+  const userDisplayMap = buildUserDisplayMap(users);
+  const items = rows.map((row) =>
+    sanitizeEntityDataForUser(req.user, entity, attachUserDisplayFields(toEntityOutput(row), userDisplayMap))
+  );
   const sorted = sortItems(items, sort);
   res.json(limit ? sorted.slice(0, limit) : sorted);
 });
@@ -912,8 +955,14 @@ app.get("/api/entities/:entity/filter", requireAuth, async (req, res) => {
     return res.json(users.map(toPublicUser).filter((u) => matchesFilter(u, filters)));
   }
 
-  const rows = await prisma.entityRecord.findMany({ where: { entity } });
-  const items = rows.map((row) => sanitizeEntityDataForUser(req.user, entity, toEntityOutput(row)));
+  const [rows, users] = await Promise.all([
+    prisma.entityRecord.findMany({ where: { entity } }),
+    prisma.user.findMany({ select: { email: true, full_name: true } }),
+  ]);
+  const userDisplayMap = buildUserDisplayMap(users);
+  const items = rows.map((row) =>
+    sanitizeEntityDataForUser(req.user, entity, attachUserDisplayFields(toEntityOutput(row), userDisplayMap))
+  );
   res.json(items.filter((item) => matchesFilter(item, filters)));
 });
 
@@ -963,12 +1012,15 @@ app.post("/api/entities/:entity", requireAuth, async (req, res) => {
   const input = sanitizeEntityInputForUser(req.user, entity, req.body);
   const nowIso = new Date().toISOString();
   const id = randomUUID();
+  const creatorName = getUserDisplayName(req.user);
   const data = {
     ...input,
     id,
     created_date: input.created_date || nowIso,
     updated_date: nowIso,
-    created_by: input.created_by || req.user.email,
+    created_by: creatorName,
+    created_by_name: creatorName,
+    created_by_email: req.user.email || null,
   };
 
   await prisma.entityRecord.create({
@@ -1120,13 +1172,16 @@ app.patch("/api/entities/:entity/:id", requireAuth, async (req, res) => {
   const currentData = isObject(existing.data) ? existing.data : {};
   const patch = sanitizeEntityInputForUser(req.user, entity, req.body);
   const nowIso = new Date().toISOString();
+  const updaterName = getUserDisplayName(req.user);
   const merged = {
     ...currentData,
     ...patch,
     id,
     created_date: currentData.created_date || existing.created_at.toISOString(),
     updated_date: nowIso,
-    updated_by: req.user.email,
+    updated_by: updaterName,
+    updated_by_name: updaterName,
+    updated_by_email: req.user.email || null,
   };
 
   await prisma.entityRecord.update({

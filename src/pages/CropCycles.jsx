@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import StatusBadge from "@/components/shared/StatusBadge";
@@ -19,6 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const defaultForm = {
   greenhouse_id: "",
@@ -35,6 +37,8 @@ const defaultCropTypeForm = { name: "" };
 const defaultVarietyForm = { crop_type_id: "", name: "" };
 
 export default function CropCycles() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [cycles, setCycles] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [cropTypes, setCropTypes] = useState([]);
@@ -80,6 +84,26 @@ export default function CropCycles() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const cycleId = new URLSearchParams(location.search).get("cycle");
+    if (!cycleId || cycles.length === 0 || showModal) return;
+
+    const cycle = cycles.find((item) => item.id === cycleId);
+    if (!cycle) return;
+
+    setEditCycle(cycle);
+    setForm({
+      ...defaultForm,
+      ...cycle,
+      crop_type_id: cycle.crop_type_id || "",
+      variety_id: cycle.variety_id || "",
+      plants_planted: cycle.plants_planted != null ? String(cycle.plants_planted) : "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("CropCycles"), { replace: true });
+  }, [cycles, location.search, navigate, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
   const cropTypeMap = Object.fromEntries(cropTypes.map(c => [c.id, c]));

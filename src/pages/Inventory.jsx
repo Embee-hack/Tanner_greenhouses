@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Package, AlertTriangle, TrendingDown, ImageIcon, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const CATS = ["fertilizer","pesticide","seeds","packaging","equipment","tools","other"];
 const defaultForm = { name: "", category: "fertilizer", unit: "", quantity_in_stock: "", reorder_level: "", unit_cost: "", supplier: "", greenhouse_id: "", notes: "", image_url: "" };
@@ -81,6 +83,8 @@ function StockAdjustModal({ item, onClose, onDone, fmt }) {
 
 export default function Inventory() {
   const { fmt } = useCurrency();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +117,26 @@ export default function Inventory() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const itemId = new URLSearchParams(location.search).get("item");
+    if (!itemId || items.length === 0 || showModal) return;
+
+    const item = items.find((current) => current.id === itemId);
+    if (!item) return;
+
+    setError("");
+    setEditItem(item);
+    setForm({
+      ...defaultForm,
+      ...item,
+      quantity_in_stock: item.quantity_in_stock ?? "",
+      reorder_level: item.reorder_level ?? "",
+      unit_cost: item.unit_cost ?? "",
+    });
+    setShowModal(true);
+    navigate(createPageUrl("Inventory"), { replace: true });
+  }, [items, location.search, navigate, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
 

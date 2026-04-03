@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
@@ -14,6 +15,7 @@ import {
   startOfWeek, endOfWeek, isSameMonth, isSameDay, parseISO, isToday
 } from "date-fns";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const EVENT_TYPES = ["planting","harvest","treatment","inspection","maintenance","other"];
 const EVENT_COLORS = {
@@ -61,6 +63,8 @@ const formatEventRange = (event) => {
 };
 
 export default function FarmCalendar() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
@@ -87,6 +91,25 @@ export default function FarmCalendar() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const eventId = new URLSearchParams(location.search).get("event");
+    if (!eventId || events.length === 0 || showModal) return;
+
+    const event = events.find((item) => item.id === eventId);
+    if (!event) return;
+
+    setEditEvent(event);
+    setError("");
+    setForm({ ...defaultForm, ...event, greenhouse_id: event.greenhouse_id || "" });
+    const selected = parseEventDate(event.date);
+    if (selected) {
+      setSelectedDay(selected);
+      setCurrentDate(selected);
+    }
+    setShowModal(true);
+    navigate(createPageUrl("FarmCalendar"), { replace: true });
+  }, [events, location.search, navigate, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
 

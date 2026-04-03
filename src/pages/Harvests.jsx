@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
@@ -13,10 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, BarChart3, Pencil, Trash2 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const defaultForm = { greenhouse_id: "", cycle_id: "", date: new Date().toISOString().slice(0, 10), kg_harvested: "", grade_a_kg: "", grade_b_kg: "", grade_c_kg: "", notes: "" };
 
 export default function Harvests() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [cycles, setCycles] = useState([]);
@@ -50,6 +54,28 @@ export default function Harvests() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const harvestId = new URLSearchParams(location.search).get("harvest");
+    if (!harvestId || records.length === 0 || showModal) return;
+
+    const record = records.find((item) => item.id === harvestId);
+    if (!record) return;
+
+    setEditItem(record);
+    setForm({
+      ...defaultForm,
+      ...record,
+      cycle_id: record.cycle_id || "",
+      kg_harvested: record.kg_harvested != null ? String(record.kg_harvested) : "",
+      grade_a_kg: record.grade_a_kg != null ? String(record.grade_a_kg) : "",
+      grade_b_kg: record.grade_b_kg != null ? String(record.grade_b_kg) : "",
+      grade_c_kg: record.grade_c_kg != null ? String(record.grade_c_kg) : "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("Harvests"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
   const availableCycles = cycles.filter(

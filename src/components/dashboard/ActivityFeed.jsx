@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
+import { createPageUrl } from "@/utils";
 
 const ENTITY_CONFIG = {
   HarvestRecord: { icon: BarChart2, color: "bg-green-100 text-green-700", label: "Harvest" },
@@ -83,7 +85,48 @@ const sortByDateDesc = (rows) =>
 
 const formatActivityCount = (count) => `${count} activit${count === 1 ? "y" : "ies"}`;
 
+const getActivitySource = (log) => {
+  const action = String(log?.action || "").trim().toLowerCase();
+  const entity = String(log?.entity || "").trim();
+  const entityId = String(log?.entity_id || "").trim();
+  const isDeleteAction = action === "delete" || action === "bulk_delete";
+
+  if (isDeleteAction || !entityId) {
+    return null;
+  }
+
+  switch (entity) {
+    case "Incident":
+      return { href: createPageUrl(`Incidents?incident=${encodeURIComponent(entityId)}`) };
+    case "Treatment":
+      return { href: createPageUrl(`Treatments?response=${encodeURIComponent(entityId)}`) };
+    case "SalesRecord":
+      return { href: createPageUrl(`Sales?sale=${encodeURIComponent(entityId)}`) };
+    case "ExpenseRecord":
+      return { href: createPageUrl(`Expenses?expense=${encodeURIComponent(entityId)}`) };
+    case "WorkerGrievance":
+      return { href: createPageUrl(`WorkerGrievances?grievance=${encodeURIComponent(entityId)}`) };
+    case "WorkerAttendance":
+      return { href: createPageUrl(`WorkerAttendance?attendance=${encodeURIComponent(entityId)}`) };
+    case "HarvestRecord":
+      return { href: createPageUrl(`Harvests?harvest=${encodeURIComponent(entityId)}`) };
+    case "InventoryItem":
+      return { href: createPageUrl(`Inventory?item=${encodeURIComponent(entityId)}`) };
+    case "CropCycle":
+      return { href: createPageUrl(`CropCycles?cycle=${encodeURIComponent(entityId)}`) };
+    case "CalendarEvent":
+      return { href: createPageUrl(`FarmCalendar?event=${encodeURIComponent(entityId)}`) };
+    case "User":
+      return { href: createPageUrl(`UserManagement?user=${encodeURIComponent(entityId)}`) };
+    case "Greenhouse":
+      return { href: createPageUrl(`GreenhouseDetail?id=${encodeURIComponent(entityId)}`) };
+    default:
+      return null;
+  }
+};
+
 export default function ActivityFeed() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pulse, setPulse] = useState(false);
@@ -244,8 +287,13 @@ export default function ActivityFeed() {
                     const actionBadge = ACTION_BADGE[log.action] || "bg-muted text-muted-foreground border-border";
                     const Icon = entityCfg.icon;
                     const actor = log.actor_name || log.actor_email || "System";
-                    return (
-                      <div key={log.id} className="flex items-start gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
+                    const source = getActivitySource(log);
+                    const rowClassName = cn(
+                      "flex w-full items-start gap-3 px-5 py-3 text-left transition-colors",
+                      source ? "cursor-pointer hover:bg-muted/30" : ""
+                    );
+                    const content = (
+                      <>
                         <div className={cn("w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5", entityCfg.color)}>
                           <Icon className="w-4 h-4" />
                         </div>
@@ -263,6 +311,21 @@ export default function ActivityFeed() {
                           <span className="text-[10px] text-muted-foreground">{entityCfg.label}</span>
                           <span className="text-[10px] text-muted-foreground">{formatTimeLabel(log.created_date || log.updated_date)}</span>
                         </div>
+                      </>
+                    );
+
+                    return source ? (
+                      <button
+                        key={log.id}
+                        type="button"
+                        onClick={() => navigate(source.href)}
+                        className={rowClassName}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      <div key={log.id} className={rowClassName}>
+                        {content}
                       </div>
                     );
                   })}

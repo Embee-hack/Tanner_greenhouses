@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import StatusBadge from "@/components/shared/StatusBadge";
@@ -21,9 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, FlaskConical, Pencil, Trash2, MoreHorizontal, Eye } from "lucide-react";
+import { getCreatedByText } from "@/lib/createdBy.js";
 import { getErrorMessage } from "@/lib/errors.js";
 import { getIncidentTitle } from "@/lib/incidents.js";
 import { cn } from "@/lib/utils";
+import { createPageUrl } from "@/utils";
 
 const TYPES = ["chemical", "biological", "physical", "repair", "inspection", "preventive", "cultural", "other"];
 const OUTCOMES = ["pending", "effective", "partial", "ineffective"];
@@ -116,6 +119,8 @@ const getResponseSortValue = (record, sortMode) => {
 };
 
 export default function Treatments() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [incidents, setIncidents] = useState([]);
@@ -133,6 +138,7 @@ export default function Treatments() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [linkedIncidentPreset, setLinkedIncidentPreset] = useState(null);
 
   const load = async () => {
     try {
@@ -161,6 +167,10 @@ export default function Treatments() {
   const incidentMap = Object.fromEntries(incidents.map((incident) => [incident.id, incident]));
   const activeGreenhouses = greenhouses.filter((greenhouse) => greenhouse.status === "active");
   const sortedRecords = [...records].sort((a, b) => getResponseSortValue(b, sortMode).localeCompare(getResponseSortValue(a, sortMode)));
+  const groupedPresetGreenhouseIds = linkedIncidentPreset?.mode === "group" ? linkedIncidentPreset.greenhouseIds || [] : [];
+  const selectableGreenhouses = linkedIncidentPreset?.mode === "group"
+    ? greenhouses.filter((greenhouse) => groupedPresetGreenhouseIds.includes(greenhouse.id))
+    : greenhouses;
   const targetGreenhouseIds = editItem
     ? (form.greenhouse_id ? [form.greenhouse_id] : [])
     : targetMode === "single"
@@ -168,7 +178,7 @@ export default function Treatments() {
       : targetMode === "selected"
         ? selectedGreenhouseIds
         : activeGreenhouses.map((greenhouse) => greenhouse.id);
-  const selectableGreenhouseIds = greenhouses.map((greenhouse) => greenhouse.id);
+  const selectableGreenhouseIds = selectableGreenhouses.map((greenhouse) => greenhouse.id);
   const allSelectableChecked = selectableGreenhouseIds.length > 0 && selectedGreenhouseIds.length === selectableGreenhouseIds.length;
   const hasSomeSelectableChecked = selectedGreenhouseIds.length > 0 && selectedGreenhouseIds.length < selectableGreenhouseIds.length;
   const openIncidents = targetGreenhouseIds.length === 1
@@ -190,9 +200,87 @@ export default function Treatments() {
       ? "Log Response"
       : `Log for ${targetGreenhouseIds.length} Houses`;
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const incidentGroupId = params.get("incidentGroup");
+    const incidentId = params.get("incident");
+    const responseId = params.get("response");
+
+    if (responseId && !editItem && records.length > 0) {
+      const response = records.find((item) => item.id === responseId);
+      if (response) {
+        setDetailItem(response);
+        navigate(createPageUrl("Treatments"), { replace: true });
+      }
+      return;
+    }
+
+    if (editItem || incidents.length === 0 || (!incidentGroupId && !incidentId)) return;
+
+    if (incidentGroupId) {
+      const groupedIncidentRecords = sortByGreenhouseCode(
+        incidents.filter((incident) => incident.shared_incident_id === incidentGroupId),
+        ghMap
+      );
+
+      if (groupedIncidentRecords.length > 0) {
+        const greenhouseIds = groupedIncidentRecords.map((incident) => incident.greenhouse_id).filter(Boolean);
+        const incidentIdsByGreenhouse = Object.fromEntries(
+          groupedIncidentRecords
+            .filter((incident) => incident.greenhouse_id)
+            .map((incident) => [incident.greenhouse_id, incident.id])
+        );
+
+        setLinkedIncidentPreset({
+          mode: "group",
+          sharedIncidentId: incidentGroupId,
+          title: getIncidentTitle(groupedIncidentRecords[0]),
+          greenhouseIds,
+          incidentIdsByGreenhouse,
+        });
+        setForm({
+          ...createDefaultForm(),
+          date: new Date().toISOString().slice(0, 10),
+          greenhouse_id: greenhouseIds[0] || "",
+        });
+        setTargetMode("selected");
+        setSelectedGreenhouseIds(greenhouseIds);
+        setEditScope("single_house");
+        setError("");
+        setShowModal(true);
+        navigate(createPageUrl("Treatments"), { replace: true });
+        return;
+      }
+    }
+
+    if (incidentId) {
+      const incident = incidents.find((item) => item.id === incidentId);
+      if (incident) {
+        setLinkedIncidentPreset({
+          mode: "single",
+          incidentId: incident.id,
+          title: getIncidentTitle(incident),
+        });
+        setForm({
+          ...createDefaultForm(),
+          date: new Date().toISOString().slice(0, 10),
+          greenhouse_id: incident.greenhouse_id || "",
+          incident_id: incident.id,
+        });
+        setTargetMode("single");
+        setSelectedGreenhouseIds([]);
+        setEditScope("single_house");
+        setError("");
+        setShowModal(true);
+        navigate(createPageUrl("Treatments"), { replace: true });
+      }
+    }
+  }, [editItem, ghMap, incidents, location.search, navigate, records]);
+
   const openCreateModal = () => {
     setDetailItem(null);
     setEditItem(null);
+    setLinkedIncidentPreset(null);
     setForm(createDefaultForm());
     setTargetMode("single");
     setSelectedGreenhouseIds([]);
@@ -204,6 +292,7 @@ export default function Treatments() {
   const openEditModal = (record, scope = "single_house") => {
     setDetailItem(null);
     setEditItem(record);
+    setLinkedIncidentPreset(null);
     setForm({
       ...createDefaultForm(),
       ...record,
@@ -221,6 +310,7 @@ export default function Treatments() {
   const closeModal = () => {
     setShowModal(false);
     setEditItem(null);
+    setLinkedIncidentPreset(null);
     setForm(createDefaultForm());
     setTargetMode("single");
     setSelectedGreenhouseIds([]);
@@ -229,6 +319,14 @@ export default function Treatments() {
   };
 
   const updateTargetMode = (mode) => {
+    if (linkedIncidentPreset?.mode === "group" && mode === targetMode) {
+      return;
+    }
+
+    if (linkedIncidentPreset?.mode === "group" && mode !== "selected") {
+      setLinkedIncidentPreset(null);
+    }
+
     setTargetMode(mode);
     setForm((current) => ({
       ...current,
@@ -258,7 +356,11 @@ export default function Treatments() {
   };
 
   const selectActiveGreenhouses = () => {
-    setSelectedGreenhouseIds(activeGreenhouses.map((greenhouse) => greenhouse.id));
+    setSelectedGreenhouseIds(
+      linkedIncidentPreset?.mode === "group"
+        ? groupedPresetGreenhouseIds
+        : activeGreenhouses.map((greenhouse) => greenhouse.id)
+    );
     setForm((current) => ({
       ...current,
       incident_id: "",
@@ -314,7 +416,12 @@ export default function Treatments() {
             base44.entities.Treatment.create({
               ...buildResponsePayload({
                 greenhouseId,
-                incidentId: targetGreenhouseIds.length === 1 ? form.incident_id || null : null,
+                incidentId:
+                  linkedIncidentPreset?.mode === "group"
+                    ? linkedIncidentPreset.incidentIdsByGreenhouse?.[greenhouseId] || null
+                    : targetGreenhouseIds.length === 1
+                      ? form.incident_id || null
+                      : null,
               }),
               shared_response_id: sharedResponseId,
               application_scope: targetMode,
@@ -370,6 +477,7 @@ export default function Treatments() {
             {getResponsePreview(row, incidentMap) ? (
               <div className="text-xs text-muted-foreground mt-0.5">{getResponsePreview(row, incidentMap)}</div>
             ) : null}
+            <div className="text-xs text-muted-foreground mt-1">{getCreatedByText(row)}</div>
             {sharedCount > 1 ? (
               <div className="text-xs text-primary mt-1">Shared across {sharedCount} houses</div>
             ) : null}
@@ -548,22 +656,28 @@ export default function Treatments() {
                       onCheckedChange={(checked) => toggleSelectAllGreenhouses(checked === true)}
                       aria-label="Select all greenhouses"
                     />
-                    All houses
+                    {linkedIncidentPreset?.mode === "group" ? "All affected houses" : "All houses"}
                   </label>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={selectActiveGreenhouses}>
-                      Active only
-                    </Button>
+                    {linkedIncidentPreset?.mode === "group" ? (
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleSelectAllGreenhouses(true)}>
+                        All affected houses
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" onClick={selectActiveGreenhouses}>
+                        Active only
+                      </Button>
+                    )}
                     <Button type="button" variant="ghost" size="sm" onClick={() => toggleSelectAllGreenhouses(false)}>
                       Clear
                     </Button>
                   </div>
                 </div>
-                {greenhouses.length === 0 ? (
+                {selectableGreenhouses.length === 0 ? (
                   <div className="px-3 py-6 text-sm text-muted-foreground text-center">No greenhouses available yet.</div>
                 ) : (
                   <div className="max-h-56 overflow-y-auto divide-y divide-border/60">
-                    {greenhouses.map((greenhouse) => (
+                    {selectableGreenhouses.map((greenhouse) => (
                       <label key={greenhouse.id} className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/40">
                         <div className="flex items-center gap-3 min-w-0">
                           <Checkbox
@@ -595,13 +709,26 @@ export default function Treatments() {
             </div>
           ) : null}
 
+          {!editItem && linkedIncidentPreset?.mode === "group" ? (
+            <FormField label="Related Incident Group">
+              <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                <p className="text-sm font-medium text-foreground">
+                  This response will be linked to the grouped incident: {linkedIncidentPreset.title}.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Each selected house will be connected to its matching incident record automatically.
+                </p>
+              </div>
+            </FormField>
+          ) : null}
+
           {editItem && editScope === "all_houses" ? (
             <FormField label="Related Incident">
               <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
                 Related incident links stay house-specific during a shared update. Edit one house at a time if you need to change the linked incident.
               </div>
             </FormField>
-          ) : (
+          ) : !linkedIncidentPreset || linkedIncidentPreset.mode !== "group" ? (
             <FormField label="Related Incident (optional)">
               <Select
                 value={form.incident_id || NO_INCIDENT_VALUE}
@@ -624,7 +751,7 @@ export default function Treatments() {
                   : "Related incident is only available for a single-house response log."}
               </p>
             </FormField>
-          )}
+          ) : null}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField label="Response Type" required>
@@ -690,7 +817,9 @@ export default function Treatments() {
                   ? `${editableResponseGroup.length} houses will be updated with these shared response details.`
                   : "This response record will be updated for one house."
                 : targetGreenhouseIds.length === 0
-                  ? "No target houses selected yet."
+                  ? linkedIncidentPreset?.mode === "group"
+                    ? "No affected houses selected yet."
+                    : "No target houses selected yet."
                   : `${targetGreenhouseIds.length} ${targetGreenhouseIds.length === 1 ? "house" : "houses"} will receive this response log.`}
             </p>
             <p className="text-xs text-muted-foreground mt-1">

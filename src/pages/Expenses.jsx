@@ -32,7 +32,10 @@ import { Plus, DollarSign, Copy, Pencil, Trash2, MoreHorizontal } from "lucide-r
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { format, parseISO } from "date-fns";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getCreatedByText } from "@/lib/createdBy.js";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const CATEGORIES = ["labor","fertilizer","pesticide","water","energy","packaging","transport","equipment","seeds","other"];
 const COLORS = ["hsl(152,60%,32%)","hsl(38,95%,52%)","hsl(199,89%,48%)","hsl(280,65%,60%)","hsl(0,72%,51%)","hsl(340,75%,55%)","hsl(45,90%,50%)","hsl(170,60%,40%)","hsl(230,70%,60%)","hsl(90,55%,45%)"];
@@ -69,6 +72,8 @@ export default function Expenses() {
   const { fmt, symbol } = useCurrency();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +107,26 @@ export default function Expenses() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const expenseId = new URLSearchParams(location.search).get("expense");
+    if (!expenseId || records.length === 0 || showModal) return;
+
+    const row = records.find((item) => item.id === expenseId);
+    if (!row) return;
+
+    setEditItem(row);
+    setForm({
+      ...defaultForm,
+      ...row,
+      greenhouse_id: row.greenhouse_id || "",
+      amount: row.amount != null ? String(row.amount) : "",
+      description: row.description || "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("Expenses"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
 
@@ -411,11 +436,14 @@ export default function Expenses() {
                               <span className="font-bold text-foreground">{fmt(row.amount, 2)}</span>
                             </td>
                             <td className="px-4 py-3">
-                              {row.description ? (
-                                <span className="text-sm text-muted-foreground">{row.description}</span>
-                              ) : (
-                                <span className="text-muted-foreground/50">—</span>
-                              )}
+                              <div className="min-w-0 max-w-[320px] whitespace-normal">
+                                {row.description ? (
+                                  <div className="text-sm text-muted-foreground">{row.description}</div>
+                                ) : (
+                                  <div className="text-muted-foreground/50">—</div>
+                                )}
+                                <div className="text-xs text-muted-foreground mt-1">{getCreatedByText(row)}</div>
+                              </div>
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex justify-end">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
@@ -14,7 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
+import { getCreatedByText } from "@/lib/createdBy.js";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -73,6 +76,8 @@ const getCategoryLabel = (value) =>
 
 export default function WorkerGrievances() {
   const { fmt } = useCurrency();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +113,31 @@ export default function WorkerGrievances() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const grievanceId = new URLSearchParams(location.search).get("grievance");
+    if (!grievanceId || records.length === 0 || showModal) return;
+
+    const record = records.find((item) => item.id === grievanceId);
+    if (!record) return;
+
+    setEditItem(record);
+    setForm({
+      worker_id: record.worker_id || "",
+      date: record.date || getToday(),
+      category: record.category || "lateness",
+      title: record.title || "",
+      severity: record.severity || "medium",
+      surcharge_amount: record.surcharge_amount != null ? String(record.surcharge_amount) : "",
+      status: record.status || "open",
+      description: record.description || "",
+      resolution_notes: record.resolution_notes || "",
+      resolved_date: record.resolved_date || "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("WorkerGrievances"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
 
   const workerMap = Object.fromEntries(workers.map((worker) => [worker.id, worker]));
   const activeWorkers = [...workers]
@@ -233,7 +263,16 @@ export default function WorkerGrievances() {
       render: (_, row) => workerMap[row.worker_id]?.full_name || row.worker_name || "—",
     },
     { key: "category", label: "Category", render: (value) => getCategoryLabel(value) },
-    { key: "title", label: "Issue", render: (value) => value || "—" },
+    {
+      key: "title",
+      label: "Issue",
+      render: (value, row) => (
+        <div className="min-w-0 max-w-[280px] whitespace-normal">
+          <div className="font-medium text-foreground">{value || "—"}</div>
+          <div className="text-xs text-muted-foreground mt-1">{getCreatedByText(row)}</div>
+        </div>
+      ),
+    },
     { key: "severity", label: "Severity", render: (value) => <StatusBadge status={value} /> },
     { key: "surcharge_amount", label: "Surcharge", align: "right", render: (value) => (value ? fmt(value) : "—") },
     { key: "status", label: "Status", render: (value) => <StatusBadge status={value} /> },

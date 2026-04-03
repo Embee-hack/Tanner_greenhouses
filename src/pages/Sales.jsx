@@ -32,7 +32,10 @@ import { Plus, ShoppingCart, Copy, Pencil, Trash2, MoreHorizontal } from "lucide
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { format, parseISO } from "date-fns";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getCreatedByText } from "@/lib/createdBy.js";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const formatSaleDate = (dateStr) => {
   try {
@@ -141,6 +144,8 @@ export default function Sales() {
   const { fmt, symbol } = useCurrency();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [cropTypes, setCropTypes] = useState([]);
@@ -186,6 +191,34 @@ export default function Sales() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const saleId = new URLSearchParams(location.search).get("sale");
+    if (!saleId || records.length === 0 || showModal) return;
+
+    const row = records.find((item) => item.id === saleId);
+    if (!row) return;
+
+    const derivedCropTypeId = row.crop_type_id || getCropTypeIdByName(row.crop_type);
+    const derivedVarietyId = row.variety_id || getVarietyIdByName(derivedCropTypeId, row.variety);
+
+    setEditItem(row);
+    setForm({
+      ...defaultForm,
+      ...row,
+      greenhouse_id: row.greenhouse_id || "",
+      crop_type_id: derivedCropTypeId || "",
+      variety_id: derivedVarietyId || "",
+      crop_type: row.crop_type || "",
+      variety: row.variety || "",
+      kg_sold: row.kg_sold != null ? String(row.kg_sold) : "",
+      price_per_kg: row.price_per_kg != null ? String(row.price_per_kg) : "",
+      notes: row.notes || "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("Sales"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
 
   const ghMap = Object.fromEntries(greenhouses.map((g) => [g.id, g]));
   const cropTypeMap = Object.fromEntries(cropTypes.map((c) => [c.id, c]));
@@ -779,11 +812,14 @@ export default function Sales() {
                               />
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-start gap-2 min-w-0">
                                 <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center flex-shrink-0">
                                   {String(row.buyer || "?")[0].toUpperCase()}
                                 </span>
-                                <span className="text-sm text-foreground">{row.buyer || "—"}</span>
+                                <div className="min-w-0">
+                                  <div className="text-sm text-foreground">{row.buyer || "—"}</div>
+                                  <div className="text-xs text-muted-foreground mt-0.5">{getCreatedByText(row)}</div>
+                                </div>
                               </div>
                             </td>
                             <td className="px-4 py-3">

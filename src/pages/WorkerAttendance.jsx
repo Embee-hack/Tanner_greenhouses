@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import Modal from "@/components/shared/Modal";
@@ -15,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 import {
   CalendarDays,
   CheckCircle2,
@@ -64,6 +66,8 @@ const issueKey = (workerId, date) => `${workerId || ""}::${date || ""}`;
 
 export default function WorkerAttendance() {
   const { fmt } = useCurrency();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
@@ -110,6 +114,28 @@ export default function WorkerAttendance() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const attendanceId = new URLSearchParams(location.search).get("attendance");
+    if (!attendanceId || records.length === 0 || showModal) return;
+
+    const record = records.find((item) => item.id === attendanceId);
+    if (!record) return;
+
+    setEditItem(record);
+    setForm({
+      worker_id: record.worker_id || "",
+      greenhouse_id: record.greenhouse_id || NO_GREENHOUSE_VALUE,
+      date: record.date || getToday(),
+      status: record.status || "present",
+      check_in_time: record.check_in_time || "",
+      check_out_time: record.check_out_time || "",
+      notes: record.notes || "",
+    });
+    setError("");
+    setShowModal(true);
+    navigate(createPageUrl("WorkerAttendance"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
 
   const workerMap = Object.fromEntries(workers.map((worker) => [worker.id, worker]));
   const greenhouseMap = Object.fromEntries(greenhouses.map((greenhouse) => [greenhouse.id, greenhouse]));

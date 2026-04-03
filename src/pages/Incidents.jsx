@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import DataTable from "@/components/shared/DataTable";
 import StatusBadge from "@/components/shared/StatusBadge";
@@ -21,9 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, AlertTriangle, Pencil, Trash2, MoreHorizontal, Eye } from "lucide-react";
+import { getCreatedByText } from "@/lib/createdBy.js";
 import { getErrorMessage } from "@/lib/errors.js";
 import { formatIncidentAffectedPlants, getIncidentTitle, getIncidentTypeLabel, isIncidentActive, isIncidentInProgress } from "@/lib/incidents.js";
 import { cn } from "@/lib/utils";
+import { createPageUrl } from "@/utils";
 
 const TYPES = ["pest","disease","environmental","structural","other"];
 const SEVERITIES = ["low","medium","high","critical"];
@@ -94,6 +97,8 @@ const generateIncidentGroupId = () =>
 const sortByGreenhouseCode = (rows, ghMap) =>
   [...rows].sort((a, b) => String(ghMap[a.greenhouse_id]?.code || "").localeCompare(String(ghMap[b.greenhouse_id]?.code || "")));
 
+const uniqueIds = (values) => Array.from(new Set(values.filter(Boolean)));
+
 const truncateText = (value, maxLength = 100) => {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -143,6 +148,8 @@ const getIncidentSortValue = (record, sortMode) => {
 };
 
 export default function Incidents() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [responses, setResponses] = useState([]);
@@ -184,6 +191,17 @@ export default function Incidents() {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    const incidentId = new URLSearchParams(location.search).get("incident");
+    if (!incidentId || records.length === 0 || showModal) return;
+
+    const incident = records.find((item) => item.id === incidentId);
+    if (!incident) return;
+
+    setDetailItem(incident);
+    navigate(createPageUrl("Incidents"), { replace: true });
+  }, [location.search, navigate, records, showModal]);
+
   const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
   const activeGreenhouses = greenhouses.filter((greenhouse) => greenhouse.status === "active");
   const activeIncidentsCount = records.filter((record) => isIncidentActive(record.status)).length;
@@ -202,15 +220,6 @@ export default function Incidents() {
     return true;
   });
   const sortedRecords = [...filteredRecords].sort((a, b) => getIncidentSortValue(b, sortMode).localeCompare(getIncidentSortValue(a, sortMode)));
-  const targetGreenhouseIds = editItem
-    ? (form.greenhouse_id ? [form.greenhouse_id] : [])
-    : targetMode === "single"
-      ? (form.greenhouse_id ? [form.greenhouse_id] : [])
-      : targetMode === "selected"
-        ? selectedGreenhouseIds
-        : activeGreenhouses.map((greenhouse) => greenhouse.id);
-  const allSelectableChecked = greenhouses.length > 0 && selectedGreenhouseIds.length === greenhouses.length;
-  const hasSomeSelectableChecked = selectedGreenhouseIds.length > 0 && selectedGreenhouseIds.length < greenhouses.length;
   const groupedIncidents = detailItem?.shared_incident_id
     ? sortByGreenhouseCode(records.filter((record) => record.shared_incident_id === detailItem.shared_incident_id), ghMap)
     : detailItem ? [detailItem] : [];
@@ -218,14 +227,51 @@ export default function Incidents() {
     ? sortByGreenhouseCode(records.filter((record) => record.shared_incident_id === editItem.shared_incident_id), ghMap)
     : editItem ? [editItem] : [];
   const isSharedEdit = editItem && editableIncidentGroup.length > 1;
+  const editableIncidentGreenhouseIds = editableIncidentGroup.map((incident) => incident.greenhouse_id).filter(Boolean);
+  const lockedGreenhouseIds = editItem
+    ? isSharedEdit && editScope === "all_houses"
+      ? editableIncidentGreenhouseIds
+      : !isSharedEdit && targetMode !== "single"
+        ? (form.greenhouse_id ? [form.greenhouse_id] : [])
+        : []
+    : [];
+  const selectedHouseStateIds = uniqueIds([...selectedGreenhouseIds, ...lockedGreenhouseIds]);
+  const targetGreenhouseIds = editItem
+    ? isSharedEdit
+      ? editScope === "all_houses"
+        ? targetMode === "all_active"
+          ? uniqueIds([...editableIncidentGreenhouseIds, ...activeGreenhouses.map((greenhouse) => greenhouse.id)])
+          : uniqueIds([...editableIncidentGreenhouseIds, ...selectedGreenhouseIds])
+        : (form.greenhouse_id ? [form.greenhouse_id] : [])
+      : targetMode === "single"
+        ? (form.greenhouse_id ? [form.greenhouse_id] : [])
+        : targetMode === "all_active"
+          ? uniqueIds([form.greenhouse_id, ...activeGreenhouses.map((greenhouse) => greenhouse.id)])
+          : uniqueIds([form.greenhouse_id, ...selectedGreenhouseIds])
+    : targetMode === "single"
+      ? (form.greenhouse_id ? [form.greenhouse_id] : [])
+      : targetMode === "selected"
+        ? selectedGreenhouseIds
+        : activeGreenhouses.map((greenhouse) => greenhouse.id);
+  const allSelectableChecked = greenhouses.length > 0 && greenhouses.every((greenhouse) => selectedHouseStateIds.includes(greenhouse.id));
+  const hasSomeSelectableChecked = selectedHouseStateIds.length > 0 && !allSelectableChecked;
+  const detailIncidentIds = detailItem
+    ? (groupedIncidents.length > 1 ? groupedIncidents.map((incident) => incident.id) : [detailItem.id])
+    : [];
   const detailResponses = detailItem
     ? responses
-        .filter((response) => response.incident_id === detailItem.id)
+        .filter((response) => detailIncidentIds.includes(response.incident_id))
         .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
     : [];
+  const showTargetModeSelector = !editItem || !isSharedEdit || editScope === "all_houses";
+  const availableTargetModes = editItem && isSharedEdit && editScope === "all_houses"
+    ? TARGET_MODES.filter((mode) => mode.value !== "single")
+    : TARGET_MODES;
   const saveLabel = editItem
     ? isSharedEdit && editScope === "all_houses"
-      ? `Save to ${editableIncidentGroup.length} Houses`
+      ? `Save to ${targetGreenhouseIds.length} Houses`
+      : !isSharedEdit && targetMode !== "single" && targetGreenhouseIds.length > 1
+        ? `Save to ${targetGreenhouseIds.length} Houses`
       : "Save Changes"
     : targetGreenhouseIds.length <= 1
       ? "Log Incident"
@@ -242,6 +288,11 @@ export default function Incidents() {
   };
 
   const openEditModal = (incident, scope = "single_house") => {
+    const incidentGroup = incident.shared_incident_id
+      ? sortByGreenhouseCode(records.filter((record) => record.shared_incident_id === incident.shared_incident_id), ghMap)
+      : [incident];
+    const incidentGroupGreenhouseIds = uniqueIds(incidentGroup.map((item) => item.greenhouse_id));
+
     setDetailItem(null);
     setEditItem(incident);
     setForm({
@@ -251,8 +302,12 @@ export default function Incidents() {
       affected_scope: incident.affected_scope || (Number(incident.affected_plants) > 0 ? "count" : "none"),
       affected_plants: incident.affected_plants != null ? String(incident.affected_plants) : "",
     });
-    setTargetMode("single");
-    setSelectedGreenhouseIds([]);
+    setTargetMode(
+      incidentGroupGreenhouseIds.length > 1
+        ? (incident.application_scope === "all_active" ? "all_active" : "selected")
+        : "single"
+    );
+    setSelectedGreenhouseIds(incidentGroupGreenhouseIds);
     setEditScope(scope);
     setError("");
     setShowModal(true);
@@ -269,6 +324,8 @@ export default function Incidents() {
   };
 
   const toggleGreenhouse = (greenhouseId, checked) => {
+    if (lockedGreenhouseIds.includes(greenhouseId)) return;
+
     setSelectedGreenhouseIds((current) => {
       if (checked) {
         return current.includes(greenhouseId) ? current : [...current, greenhouseId];
@@ -278,11 +335,11 @@ export default function Incidents() {
   };
 
   const toggleSelectAllGreenhouses = (checked) => {
-    setSelectedGreenhouseIds(checked ? greenhouses.map((greenhouse) => greenhouse.id) : []);
+    setSelectedGreenhouseIds(checked ? uniqueIds([...lockedGreenhouseIds, ...greenhouses.map((greenhouse) => greenhouse.id)]) : [...lockedGreenhouseIds]);
   };
 
   const selectActiveGreenhouses = () => {
-    setSelectedGreenhouseIds(activeGreenhouses.map((greenhouse) => greenhouse.id));
+    setSelectedGreenhouseIds(uniqueIds([...lockedGreenhouseIds, ...activeGreenhouses.map((greenhouse) => greenhouse.id)]));
   };
 
   const buildIncidentPayload = (greenhouseId) => {
@@ -299,26 +356,65 @@ export default function Incidents() {
     };
   };
 
+  const upsertSharedIncidentGroup = async ({ desiredGreenhouseIds, sharedIncidentId, applicationScope, preserveExistingStatuses = false }) => {
+    const greenhouseIds = uniqueIds(desiredGreenhouseIds);
+    const existingGroup = isSharedEdit ? editableIncidentGroup : editItem ? [editItem] : [];
+    const existingByGreenhouse = Object.fromEntries(
+      existingGroup
+        .filter((incident) => incident.greenhouse_id)
+        .map((incident) => [incident.greenhouse_id, incident])
+    );
+
+    await Promise.all(
+      greenhouseIds.map((greenhouseId) => {
+        const existing = existingByGreenhouse[greenhouseId];
+        const payload = {
+          ...buildIncidentPayload(greenhouseId),
+          status: preserveExistingStatuses ? existing?.status || "open" : form.status || editItem?.status || "open",
+          shared_incident_id: sharedIncidentId,
+          application_scope: applicationScope,
+        };
+
+        return existing
+          ? base44.entities.Incident.update(existing.id, payload)
+          : base44.entities.Incident.create(payload);
+      })
+    );
+  };
+
+  const openResponseLog = (incident, scope = "single") => {
+    if (!incident) return;
+    const href = scope === "group" && incident.shared_incident_id
+      ? createPageUrl(`Treatments?incidentGroup=${encodeURIComponent(incident.shared_incident_id)}`)
+      : createPageUrl(`Treatments?incident=${encodeURIComponent(incident.id)}`);
+    setDetailItem(null);
+    navigate(href);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
       if (editItem) {
         if (isSharedEdit && editScope === "all_houses") {
-          await Promise.all(
-            editableIncidentGroup.map((incident) =>
-              base44.entities.Incident.update(incident.id, {
-                ...buildIncidentPayload(incident.greenhouse_id),
-                shared_incident_id: incident.shared_incident_id || editItem.shared_incident_id || null,
-                application_scope: incident.application_scope || "selected",
-              })
-            )
-          );
+          await upsertSharedIncidentGroup({
+            desiredGreenhouseIds: targetGreenhouseIds,
+            sharedIncidentId: editItem.shared_incident_id || generateIncidentGroupId(),
+            applicationScope: targetMode === "all_active" ? "all_active" : "selected",
+            preserveExistingStatuses: true,
+          });
+        } else if (!isSharedEdit && targetMode !== "single" && targetGreenhouseIds.length > 1) {
+          await upsertSharedIncidentGroup({
+            desiredGreenhouseIds: targetGreenhouseIds,
+            sharedIncidentId: editItem.shared_incident_id || generateIncidentGroupId(),
+            applicationScope: targetMode,
+          });
         } else {
           await base44.entities.Incident.update(editItem.id, {
             ...buildIncidentPayload(form.greenhouse_id),
-            shared_incident_id: editItem.shared_incident_id || null,
-            application_scope: editItem.application_scope || "single",
+            status: form.status || editItem.status || "open",
+            shared_incident_id: isSharedEdit ? editItem.shared_incident_id || null : null,
+            application_scope: isSharedEdit ? editItem.application_scope || "selected" : "single",
           });
         }
       } else {
@@ -398,6 +494,7 @@ export default function Incidents() {
           {getIncidentPreview(row) ? (
             <div className="text-xs text-muted-foreground mt-0.5">{getIncidentPreview(row)}</div>
           ) : null}
+          <div className="text-xs text-muted-foreground mt-1">{getCreatedByText(row)}</div>
           {sharedCount > 1 ? (
             <div className="text-xs text-primary mt-1">Shared across {sharedCount} houses</div>
           ) : null}
@@ -541,10 +638,10 @@ export default function Incidents() {
 
       <Modal open={showModal} onClose={closeModal} title={editItem ? "Edit Incident" : "Log Incident"}>
         <div className="space-y-4">
-          {!editItem ? (
+          {showTargetModeSelector ? (
             <FormField label="Applies To" required>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {TARGET_MODES.map((mode) => (
+                {availableTargetModes.map((mode) => (
                   <button
                     key={mode.value}
                     type="button"
@@ -561,6 +658,16 @@ export default function Incidents() {
                   </button>
                 ))}
               </div>
+              {editItem && !isSharedEdit && targetMode !== "single" ? (
+                <p className="text-xs text-muted-foreground mt-2">
+                  This edit will convert the current incident into a grouped incident and keep {ghMap[form.greenhouse_id]?.code || "the current house"} as the reference house.
+                </p>
+              ) : null}
+              {editItem && isSharedEdit && editScope === "all_houses" ? (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Existing affected houses stay in the incident group. You can add more houses here if the same event spread further.
+                </p>
+              ) : null}
             </FormField>
           ) : null}
 
@@ -594,11 +701,14 @@ export default function Incidents() {
 
           {editItem || targetMode === "single" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label={editItem && editScope === "all_houses" ? "Reference House" : "Greenhouse"} required>
+              <FormField
+                label={editItem && (editScope === "all_houses" || targetMode !== "single") ? "Reference House" : "Greenhouse"}
+                required
+              >
                 <Select
                   value={form.greenhouse_id}
                   onValueChange={v => setForm(f => ({ ...f, greenhouse_id: v, cycle_id: "" }))}
-                  disabled={editItem && editScope === "all_houses"}
+                  disabled={editItem && (editScope === "all_houses" || targetMode !== "single")}
                 >
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}</SelectContent>
@@ -614,7 +724,7 @@ export default function Incidents() {
             </FormField>
           )}
 
-          {!editItem && targetMode === "selected" ? (
+          {showTargetModeSelector && targetMode === "selected" ? (
             <FormField label="Select Houses" required>
               <div className="rounded-xl border border-border">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -643,13 +753,17 @@ export default function Incidents() {
                       <label key={greenhouse.id} className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/40">
                         <div className="flex items-center gap-3 min-w-0">
                           <Checkbox
-                            checked={selectedGreenhouseIds.includes(greenhouse.id)}
+                            checked={selectedHouseStateIds.includes(greenhouse.id)}
                             onCheckedChange={(checked) => toggleGreenhouse(greenhouse.id, checked === true)}
                             aria-label={`Select ${greenhouse.code}`}
+                            disabled={lockedGreenhouseIds.includes(greenhouse.id)}
                           />
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-foreground">{greenhouse.code}</div>
-                            <div className="text-xs text-muted-foreground capitalize">{greenhouse.status || "active"}</div>
+                            <div className="text-xs text-muted-foreground capitalize">
+                              {greenhouse.status || "active"}
+                              {lockedGreenhouseIds.includes(greenhouse.id) ? " · required" : ""}
+                            </div>
                           </div>
                         </div>
                       </label>
@@ -660,10 +774,12 @@ export default function Incidents() {
             </FormField>
           ) : null}
 
-          {!editItem && targetMode === "all_active" ? (
+          {showTargetModeSelector && targetMode === "all_active" ? (
             <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
               <p className="text-sm font-medium text-foreground">
-                This will create a linked incident record for {activeGreenhouses.length} active {activeGreenhouses.length === 1 ? "house" : "houses"}.
+                {editItem
+                  ? `This will apply the incident across ${targetGreenhouseIds.length} active ${targetGreenhouseIds.length === 1 ? "house" : "houses"}.`
+                  : `This will create a linked incident record for ${activeGreenhouses.length} active ${activeGreenhouses.length === 1 ? "house" : "houses"}.`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Each affected house will still keep its own status so repairs and follow-up can be tracked separately.
@@ -748,15 +864,19 @@ export default function Incidents() {
               className="h-20 resize-none"
             />
           </FormField>
-          {!editItem ? (
+          {!editItem || (showTargetModeSelector && targetMode !== "single") ? (
             <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
               <p className="text-sm font-medium text-foreground">
                 {targetGreenhouseIds.length === 0
                   ? "No target houses selected yet."
-                  : `${targetGreenhouseIds.length} ${targetGreenhouseIds.length === 1 ? "house" : "houses"} will receive this incident record.`}
+                  : editItem
+                    ? `${targetGreenhouseIds.length} ${targetGreenhouseIds.length === 1 ? "house" : "houses"} will remain attached to this incident after save.`
+                    : `${targetGreenhouseIds.length} ${targetGreenhouseIds.length === 1 ? "house" : "houses"} will receive this incident record.`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                A separate incident record will be created for each selected house so greenhouse detail pages and house-level follow-up remain accurate.
+                {editItem
+                  ? "Each house keeps its own incident record, so greenhouse detail pages and house-level follow-up remain accurate."
+                  : "A separate incident record will be created for each selected house so greenhouse detail pages and house-level follow-up remain accurate."}
               </p>
             </div>
           ) : null}
@@ -869,8 +989,12 @@ export default function Incidents() {
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked Responses</div>
                   <div className="text-sm text-muted-foreground mt-1">
                     {detailResponses.length > 0
-                      ? `${detailResponses.length} response${detailResponses.length === 1 ? "" : "s"} logged against this incident`
-                      : "No response has been linked to this incident yet."}
+                      ? groupedIncidents.length > 1
+                        ? `${detailResponses.length} response${detailResponses.length === 1 ? "" : "s"} logged across the affected houses in this grouped incident`
+                        : `${detailResponses.length} response${detailResponses.length === 1 ? "" : "s"} logged against this incident`
+                      : groupedIncidents.length > 1
+                        ? "No response has been linked to any of the affected houses in this grouped incident yet."
+                        : "No response has been linked to this incident yet."}
                   </div>
                 </div>
               </div>
@@ -879,6 +1003,11 @@ export default function Incidents() {
                   {detailResponses.slice(0, 4).map((response) => (
                     <div key={response.id} className="rounded-lg border border-border bg-muted/20 px-3 py-3">
                       <div className="flex flex-wrap items-center gap-2">
+                        {groupedIncidents.length > 1 ? (
+                          <div className="inline-flex rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
+                            {ghMap[response.greenhouse_id]?.code || "Unknown house"}
+                          </div>
+                        ) : null}
                         <div className="text-sm font-medium text-foreground capitalize">{response.treatment_type || "Response"}</div>
                         <StatusBadge status={response.outcome || "pending"} />
                         <div className="text-xs text-muted-foreground">{response.date || "—"}</div>
@@ -894,6 +1023,12 @@ export default function Incidents() {
             </div>
 
             <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => openResponseLog(detailItem, groupedIncidents.length > 1 ? "group" : "single")}
+              >
+                {groupedIncidents.length > 1 ? "Log Response for All Affected Houses" : "Log Response"}
+              </Button>
               {detailItem.status !== "resolved" && !isIncidentInProgress(detailItem.status) ? (
                 <Button variant="outline" onClick={() => updateStatus(detailItem, "in_progress")}>Start response</Button>
               ) : null}

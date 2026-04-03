@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import Modal from "@/components/shared/Modal";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const roleColors = {
   admin: "bg-primary/10 text-primary border-primary/20",
@@ -28,6 +30,8 @@ const defaultUserForm = {
 };
 
 export default function UserManagement() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -59,6 +63,26 @@ export default function UserManagement() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const targetUserId = new URLSearchParams(location.search).get("user");
+    if (!targetUserId || users.length === 0 || showUserModal) return;
+
+    const targetUser = users.find((item) => item.id === targetUserId);
+    if (!targetUser) return;
+
+    setEditingUser(targetUser);
+    setUserForm({
+      full_name: targetUser.full_name || "",
+      email: targetUser.email || "",
+      password: "",
+      role: targetUser.role || "farm_manager",
+    });
+    setFormError("");
+    setShowPassword(false);
+    setShowUserModal(true);
+    navigate(createPageUrl("UserManagement"), { replace: true });
+  }, [location.search, navigate, showUserModal, users]);
 
   const openCreateModal = () => {
     setEditingUser(null);
