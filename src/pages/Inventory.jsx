@@ -6,6 +6,7 @@ import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +95,9 @@ export default function Inventory() {
   const [saving, setSaving] = useState(false);
   const [catFilter, setCatFilter] = useState("all");
   const [adjustItem, setAdjustItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fileRef = useRef();
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
@@ -192,12 +195,18 @@ export default function Inventory() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+
+    setDeleting(true);
     try {
-      await base44.entities.InventoryItem.delete(id);
-      load();
+      await base44.entities.InventoryItem.delete(deleteItem.id);
+      setDeleteItem(null);
+      await load();
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to delete inventory item."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -290,7 +299,7 @@ export default function Inventory() {
                     <button onClick={() => openEdit(item)} className="flex-1 py-1 text-xs border border-border rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1">
                       <Pencil className="w-3 h-3" /> Edit
                     </button>
-                    <button onClick={() => handleDelete(item.id)} className="p-1 text-xs border border-border rounded-lg hover:bg-red-50 hover:border-red-200 transition-colors text-danger">
+                    <button onClick={() => setDeleteItem(item)} className="p-1 text-xs border border-border rounded-lg hover:bg-red-50 hover:border-red-200 transition-colors text-danger">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
@@ -378,6 +387,18 @@ export default function Inventory() {
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteItem}
+        onOpenChange={(open) => {
+          if (!open) setDeleteItem(null);
+        }}
+        title="Delete this inventory item?"
+        description="This inventory item will be removed from stock records. This action cannot be undone."
+        confirmLabel="Delete Item"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

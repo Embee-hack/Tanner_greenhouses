@@ -9,8 +9,9 @@ import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid, Trash2, MoreHorizontal, ArrowUpRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -29,66 +30,116 @@ const blockColors = [
   "from-primary/60 to-primary/80",
 ];
 
-function GreenhouseCard({ gh, onEdit, onDelete }) {
+function GreenhouseRow({ gh, blockLabel, onOpen, onEdit, onDelete }) {
   const sc = statusConfig[gh.status] || statusConfig.active;
-  const colorIdx = parseInt(gh.code?.replace(/\D/g, "") || "0") % blockColors.length;
-  const gradient = blockColors[colorIdx];
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
-      {/* Color header */}
-      <div className={`h-0.5 bg-gradient-to-r ${gradient} opacity-40`} />
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <span className="text-2xl font-black text-foreground">{gh.code}</span>
-            {gh.name && <h3 className="font-medium text-foreground text-xs mt-1 text-muted-foreground">{gh.name}</h3>}
-          </div>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.bg} ${sc.text} ${sc.border}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-            {sc.label}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="bg-muted/50 rounded-xl p-2.5">
-            <div className="flex items-center gap-1 mb-1">
-              <Maximize2 className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Area</span>
+    <div className="flex items-start gap-3 p-3 sm:p-4">
+      <button
+        type="button"
+        onClick={() => onOpen(gh)}
+        className="flex-1 min-w-0 rounded-2xl border border-border/70 bg-background/70 px-4 py-4 text-left transition-all hover:border-primary/30 hover:bg-muted/40 hover:shadow-sm"
+      >
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+          <div className="min-w-0 xl:w-72">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-3xl font-black tracking-tight text-foreground">{gh.code}</span>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg} ${sc.text} ${sc.border}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                {sc.label}
+              </span>
             </div>
-            <p className="text-sm font-bold text-foreground">{gh.area ? gh.area.toLocaleString() : "—"} <span className="text-xs font-normal text-muted-foreground">m²</span></p>
+            <div className="mt-1 text-sm font-medium text-foreground">{gh.name || "No greenhouse name"}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{blockLabel}</div>
           </div>
-          <div className="bg-muted/50 rounded-xl p-2.5">
-            <div className="flex items-center gap-1 mb-1">
-              <Layers className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Capacity</span>
-            </div>
-            <p className="text-sm font-bold text-foreground">{gh.capacity_plants ? gh.capacity_plants.toLocaleString() : "—"} <span className="text-xs font-normal text-muted-foreground">plants</span></p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            to={createPageUrl(`GreenhouseDetail?id=${gh.id}`)}
-            className="flex-1 text-center text-xs font-semibold bg-primary text-primary-foreground rounded-lg py-1.5 hover:opacity-90 transition-opacity"
-          >
-            View Details
-          </Link>
-          <button
-            onClick={() => onEdit(gh)}
-            className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(gh)}
-            className="p-1.5 rounded-lg border border-danger/20 hover:bg-danger/5 transition-colors text-danger"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-muted/50 px-3 py-3">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Maximize2 className="w-3 h-3" />
+                Area
+              </div>
+              <div className="mt-1 text-lg font-bold text-foreground">
+                {gh.area ? gh.area.toLocaleString() : "—"}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">m²</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-muted/50 px-3 py-3">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Layers className="w-3 h-3" />
+                Capacity
+              </div>
+              <div className="mt-1 text-lg font-bold text-foreground">
+                {gh.capacity_plants ? gh.capacity_plants.toLocaleString() : "—"}
+                <span className="ml-1 text-sm font-normal text-muted-foreground">plants</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-muted/50 px-3 py-3">
+              <div className="text-xs text-muted-foreground">Notes</div>
+              <div className="mt-1 truncate text-sm font-medium text-foreground">{gh.notes || "No extra notes"}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 xl:w-36 xl:justify-end">
+            <span className="text-sm font-semibold text-primary">Open details</span>
+            <ArrowUpRight className="w-4 h-4 text-primary" />
+          </div>
         </div>
+      </button>
+
+      <div className="pt-2" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" aria-label={`Open actions for ${gh.code}`}>
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onSelect={() => onEdit(gh)}>
+              <Pencil className="w-4 h-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDelete(gh)} className="text-danger focus:text-danger">
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
+  );
+}
+
+function GreenhouseSection({ title, subtitle, gradient, rows, onOpen, onEdit, onDelete }) {
+  return (
+    <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className={`h-1 bg-gradient-to-r ${gradient}`} />
+      <div className="border-b border-border px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{title}</h3>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {rows.length} greenhouse{rows.length === 1 ? "" : "s"}
+          </div>
+        </div>
+      </div>
+      <div className="divide-y divide-border">
+        {rows.map((gh) => (
+          <GreenhouseRow
+            key={gh.id}
+            gh={gh}
+            blockLabel={title}
+            onOpen={onOpen}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -112,6 +163,7 @@ const defaultBlockForm = { code: "", name: "", notes: "" };
 const NONE_VALUE = "__none__";
 
 export default function Greenhouses() {
+  const navigate = useNavigate();
   const [greenhouses, setGreenhouses] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -294,6 +346,29 @@ export default function Greenhouses() {
     return block.name || "Unnamed Block";
   };
 
+  const greenhouseGroups = [...greenhouses]
+    .sort((a, b) => String(a.code || "").localeCompare(String(b.code || "")))
+    .reduce((groups, greenhouse) => {
+      const block = blocks.find((item) => item.id === greenhouse.block_id) || null;
+      const key = block?.id || "__unassigned__";
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          title: block ? formatBlockLabel(block) : "Unassigned Greenhouses",
+          gradient: blockColors[Object.keys(groups).length % blockColors.length],
+          rows: [],
+        };
+      }
+      groups[key].rows.push(greenhouse);
+      return groups;
+    }, {});
+
+  const groupedGreenhouses = Object.values(greenhouseGroups).sort((a, b) => {
+    if (a.key === "__unassigned__") return 1;
+    if (b.key === "__unassigned__") return -1;
+    return a.title.localeCompare(b.title);
+  });
+
   const activeCount = greenhouses.filter(g => g.status === "active").length;
   const maintenanceCount = greenhouses.filter(g => g.status === "maintenance").length;
   const totalArea = greenhouses.reduce((sum, g) => sum + (g.area || 0), 0);
@@ -330,16 +405,30 @@ export default function Greenhouses() {
       {!loading && greenhouses.length === 0 ? (
         <EmptyState icon={Sprout} title="No greenhouses yet" description="Add your first greenhouse to get started." action={<Button onClick={openAdd}><Plus className="w-4 h-4 mr-1" />Add Greenhouse</Button>} />
       ) : loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-44 bg-muted animate-pulse rounded-2xl" />
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-32 bg-muted animate-pulse rounded-3xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {greenhouses.map(gh => (
-            <GreenhouseCard key={gh.id} gh={gh} onEdit={openEdit} onDelete={(row) => setDeleteDialog({ kind: "greenhouse", item: row })} />
-          ))}
+        <div className="space-y-4">
+          {groupedGreenhouses.map((group) => {
+            const groupArea = group.rows.reduce((sum, item) => sum + (item.area || 0), 0);
+            const groupCapacity = group.rows.reduce((sum, item) => sum + (item.capacity_plants || 0), 0);
+
+            return (
+              <GreenhouseSection
+                key={group.key}
+                title={group.title}
+                subtitle={`${groupArea ? `${groupArea.toLocaleString()} m²` : "Area not recorded"} · ${groupCapacity ? `${groupCapacity.toLocaleString()} plants capacity` : "Capacity not recorded"}`}
+                gradient={group.gradient}
+                rows={group.rows}
+                onOpen={(row) => navigate(createPageUrl(`GreenhouseDetail?id=${row.id}`))}
+                onEdit={openEdit}
+                onDelete={(row) => setDeleteDialog({ kind: "greenhouse", item: row })}
+              />
+            );
+          })}
         </div>
       )}
 

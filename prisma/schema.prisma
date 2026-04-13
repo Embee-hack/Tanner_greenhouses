@@ -56,12 +56,12 @@ model PoultryFlock {
   notes              String?
   created_at         DateTime           @default(now())
   updated_at         DateTime           @updatedAt
-  poultry_house      PoultryHouse       @relation(fields: [poultry_house_id], references: [id])
   daily_logs         PoultryDailyLog[]
+  expenses           PoultryExpense[]
   feed_logs          PoultryFeedLog[]
+  poultry_house      PoultryHouse       @relation(fields: [poultry_house_id], references: [id])
   health_logs        PoultryHealthLog[]
   sales              PoultrySale[]
-  expenses           PoultryExpense[]
 
   @@index([poultry_house_id])
   @@index([status])
@@ -174,9 +174,9 @@ model GoatPen {
   notes      String?
   created_at DateTime      @default(now())
   updated_at DateTime      @updatedAt
-  goats      Goat[]
-  feed_logs  GoatFeedLog[]
   expenses   GoatExpense[]
+  feed_logs  GoatFeedLog[]
+  goats      Goat[]
 
   @@map("goat_pens")
 }
@@ -197,14 +197,14 @@ model Goat {
   notes            String?
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
-  pen              GoatPen?          @relation(fields: [pen_id], references: [id])
-  breeding_as_doe  GoatBreedingLog[] @relation("DoeGoat")
   breeding_as_buck GoatBreedingLog[] @relation("BuckGoat")
-  health_logs      GoatHealthLog[]
-  weight_logs      GoatWeightLog[]
-  feed_logs        GoatFeedLog[]
-  sales            GoatSale[]
+  breeding_as_doe  GoatBreedingLog[] @relation("DoeGoat")
   expenses         GoatExpense[]
+  feed_logs        GoatFeedLog[]
+  health_logs      GoatHealthLog[]
+  sales            GoatSale[]
+  weight_logs      GoatWeightLog[]
+  pen              GoatPen?          @relation(fields: [pen_id], references: [id])
 
   @@index([pen_id])
   @@index([status])
@@ -223,8 +223,8 @@ model GoatBreedingLog {
   notes                 String?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
-  doe_goat              Goat      @relation("DoeGoat", fields: [doe_goat_id], references: [id])
   buck_goat             Goat?     @relation("BuckGoat", fields: [buck_goat_id], references: [id])
+  doe_goat              Goat      @relation("DoeGoat", fields: [doe_goat_id], references: [id])
 
   @@index([doe_goat_id])
   @@index([buck_goat_id])

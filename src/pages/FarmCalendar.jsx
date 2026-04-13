@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,8 +71,10 @@ export default function FarmCalendar() {
   const [greenhouses, setGreenhouses] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editEvent, setEditEvent] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -167,12 +170,18 @@ export default function FarmCalendar() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+
+    setDeleting(true);
     try {
-      await base44.entities.CalendarEvent.delete(id);
-      load();
+      await base44.entities.CalendarEvent.delete(deleteItem.id);
+      setDeleteItem(null);
+      await load();
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to delete calendar event."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -286,7 +295,7 @@ export default function FarmCalendar() {
                       {ev.description && <div className="mt-1 opacity-70">{ev.description}</div>}
                       <div className="flex gap-2 mt-2">
                         <button onClick={() => openEdit(ev)} className="underline">Edit</button>
-                        <button onClick={() => handleDelete(ev.id)} className="underline">Delete</button>
+                        <button onClick={() => setDeleteItem(ev)} className="underline">Delete</button>
                       </div>
                     </div>
                   ))}
@@ -347,6 +356,18 @@ export default function FarmCalendar() {
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteItem}
+        onOpenChange={(open) => {
+          if (!open) setDeleteItem(null);
+        }}
+        title="Delete this calendar event?"
+        description="This calendar event will be removed from the schedule. This action cannot be undone."
+        confirmLabel="Delete Event"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

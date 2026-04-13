@@ -41,8 +41,15 @@ const ALL_WORKERS_VALUE = "__all_workers__";
 const ALL_STATUSES_VALUE = "__all_statuses__";
 const NO_GREENHOUSE_VALUE = "__none__";
 const UNMARKED_STATUS = "__unmarked__";
+const ATTENDANCE_WINDOW_DAYS = 60;
 
 const getToday = () => new Date().toISOString().slice(0, 10);
+const getDateDaysAgo = (days) => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - Math.max(0, Number(days) || 0));
+  return date.toISOString().slice(0, 10);
+};
 
 const createDefaultForm = () => ({
   worker_id: "",
@@ -81,61 +88,79 @@ export default function WorkerAttendance() {
   const [form, setForm] = useState(createDefaultForm());
   const [sheetDate, setSheetDate] = useState(getToday());
   const [sheetRows, setSheetRows] = useState([]);
+  const [sheetLoading, setSheetLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sheetSaving, setSheetSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [workerFilter, setWorkerFilter] = useState(ALL_WORKERS_VALUE);
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES_VALUE);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(getDateDaysAgo(ATTENDANCE_WINDOW_DAYS - 1));
+  const [toDate, setToDate] = useState(getToday());
 
-  const load = async () => {
+  const load = async (showSpinner = true) => {
     try {
-      setLoading(true);
-      const [attendanceRows, workerRows, greenhouseRows, grievanceRows] = await Promise.all([
-        base44.entities.WorkerAttendance.list("-date", 1200),
-        base44.entities.Worker.list(),
-        base44.entities.Greenhouse.list("code"),
-        base44.entities.WorkerGrievance.list("-date", 800),
-      ]);
-      setRecords(attendanceRows);
-      setWorkers(workerRows);
-      setGreenhouses(greenhouseRows);
-      setGrievances(grievanceRows);
+      if (showSpinner) setLoading(true);
+      const data = await base44.attendance.bootstrap({
+        from_date: fromDate,
+        to_date: toDate,
+      });
+      setRecords(data?.records || []);
+      setWorkers(data?.workers || []);
+      setGreenhouses(data?.greenhouses || []);
+      setGrievances(data?.grievances || []);
       setLoadError("");
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load worker attendance."));
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [fromDate, toDate]);
 
   useEffect(() => {
     const attendanceId = new URLSearchParams(location.search).get("attendance");
-    if (!attendanceId || records.length === 0 || showModal) return;
+    if (!attendanceId || showModal) return;
 
-    const record = records.find((item) => item.id === attendanceId);
-    if (!record) return;
+    let cancelled = false;
 
-    setEditItem(record);
-    setForm({
-      worker_id: record.worker_id || "",
-      greenhouse_id: record.greenhouse_id || NO_GREENHOUSE_VALUE,
-      date: record.date || getToday(),
-      status: record.status || "present",
-      check_in_time: record.check_in_time || "",
-      check_out_time: record.check_out_time || "",
-      notes: record.notes || "",
-    });
-    setError("");
-    setShowModal(true);
-    navigate(createPageUrl("WorkerAttendance"), { replace: true });
-  }, [location.search, navigate, records, showModal]);
+    const openFromQuery = async () => {
+      try {
+        const record = await base44.entities.WorkerAttendance.get(attendanceId);
+        if (cancelled) return;
+
+        setEditItem(record);
+        setForm({
+          worker_id: record.worker_id || "",
+          greenhouse_id: record.greenhouse_id || NO_GREENHOUSE_VALUE,
+          date: record.date || getToday(),
+          status: record.status || "present",
+          check_in_time: record.check_in_time || "",
+          check_out_time: record.check_out_time || "",
+          notes: record.notes || "",
+        });
+        setError("");
+        setShowModal(true);
+        setLoadError("");
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(getErrorMessage(err, "Failed to load attendance record."));
+      } finally {
+        if (!cancelled) {
+          navigate(createPageUrl("WorkerAttendance"), { replace: true });
+        }
+      }
+    };
+
+    openFromQuery();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.search, navigate, showModal]);
 
   const workerMap = Object.fromEntries(workers.map((worker) => [worker.id, worker]));
   const greenhouseMap = Object.fromEntries(greenhouses.map((greenhouse) => [greenhouse.id, greenhouse]));
@@ -171,11 +196,19 @@ export default function WorkerAttendance() {
   const todayOff = todayRecords.filter((record) => isOffStatus(record.status)).length;
   const todayIssues = grievances.filter((grievance) => grievance.date === today).length;
 
-  const buildSheetRows = (date) =>
-    attendanceWorkers.map((worker) => {
-      const matches = records
-        .filter((record) => record.worker_id === worker.id && record.date === date)
-        .sort((a, b) => String(b.updated_date || "").localeCompare(String(a.updated_date || "")));
+  const buildSheetRows = (dailyRecords) => {
+    const recordsByWorker = new Map();
+
+    dailyRecords.forEach((record) => {
+      const list = recordsByWorker.get(record.worker_id) || [];
+      list.push(record);
+      recordsByWorker.set(record.worker_id, list);
+    });
+
+    return attendanceWorkers.map((worker) => {
+      const matches = (recordsByWorker.get(worker.id) || []).sort((a, b) =>
+        String(b.updated_date || "").localeCompare(String(a.updated_date || ""))
+      );
       const existing = matches[0];
       return {
         worker_id: worker.id,
@@ -189,6 +222,21 @@ export default function WorkerAttendance() {
         existing_ids: matches.map((record) => record.id),
       };
     });
+  };
+
+  const loadSheetRows = async (date) => {
+    try {
+      setSheetLoading(true);
+      const dailyRecords = await base44.attendance.day(date);
+      setSheetRows(buildSheetRows(dailyRecords || []));
+      setError("");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to load attendance sheet for this date."));
+      setSheetRows([]);
+    } finally {
+      setSheetLoading(false);
+    }
+  };
 
   const openCreateModal = () => {
     setEditItem(null);
@@ -222,14 +270,15 @@ export default function WorkerAttendance() {
   const openSheetModal = () => {
     const initialDate = getToday();
     setSheetDate(initialDate);
-    setSheetRows(buildSheetRows(initialDate));
     setError("");
     setShowSheetModal(true);
+    loadSheetRows(initialDate);
   };
 
   const closeSheetModal = () => {
     setShowSheetModal(false);
     setSheetRows([]);
+    setSheetLoading(false);
     setError("");
   };
 
@@ -263,8 +312,8 @@ export default function WorkerAttendance() {
     setError("");
     try {
       const payload = buildPayload(form);
-      const duplicates = records
-        .filter((record) => record.worker_id === form.worker_id && record.date === form.date && record.id !== editItem?.id)
+      const duplicates = (await base44.attendance.day(form.date))
+        .filter((record) => record.worker_id === form.worker_id && record.id !== editItem?.id)
         .sort((a, b) => String(b.updated_date || "").localeCompare(String(a.updated_date || "")));
 
       if (editItem) {
@@ -282,7 +331,7 @@ export default function WorkerAttendance() {
       }
 
       closeModal();
-      await load();
+      await load(false);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save attendance record."));
     } finally {
@@ -299,7 +348,7 @@ export default function WorkerAttendance() {
       if (editItem?.id === deleteItem.id) {
         closeModal();
       }
-      await load();
+      await load(false);
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to delete attendance record."));
     } finally {
@@ -366,7 +415,7 @@ export default function WorkerAttendance() {
 
       await Promise.all(operations);
       closeSheetModal();
-      await load();
+      await load(false);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to save the daily attendance sheet."));
     } finally {
@@ -419,7 +468,7 @@ export default function WorkerAttendance() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHeader
         title="Attendance Sheet"
-        subtitle={`${records.length} attendance entries recorded`}
+        subtitle={`${records.length} attendance entries in the current window`}
         actions={
           <>
             <Button size="sm" variant="outline" onClick={openSheetModal} className="gap-1.5">
@@ -432,7 +481,7 @@ export default function WorkerAttendance() {
         }
       />
 
-      <ErrorBanner message={loadError} onRetry={load} />
+      <ErrorBanner message={loadError} onRetry={() => load()} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Marked Today" value={todayRecords.length} subtitle="Workers recorded today" icon={Users} color="primary" loading={loading} />
@@ -596,14 +645,14 @@ export default function WorkerAttendance() {
                 onChange={(event) => {
                   const nextDate = event.target.value;
                   setSheetDate(nextDate);
-                  setSheetRows(buildSheetRows(nextDate));
+                  loadSheetRows(nextDate);
                 }}
               />
             </FormField>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => applySheetStatus("present")}>Mark all present</Button>
-              <Button type="button" variant="outline" onClick={() => applySheetStatus("off_day")}>Mark all off</Button>
-              <Button type="button" variant="ghost" onClick={() => applySheetStatus(UNMARKED_STATUS)}>Clear all</Button>
+              <Button type="button" variant="outline" onClick={() => applySheetStatus("present")} disabled={sheetLoading}>Mark all present</Button>
+              <Button type="button" variant="outline" onClick={() => applySheetStatus("off_day")} disabled={sheetLoading}>Mark all off</Button>
+              <Button type="button" variant="ghost" onClick={() => applySheetStatus(UNMARKED_STATUS)} disabled={sheetLoading}>Clear all</Button>
             </div>
           </div>
 
@@ -617,7 +666,11 @@ export default function WorkerAttendance() {
           </div>
 
           <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-            {sheetRows.length === 0 ? (
+            {sheetLoading ? (
+              <div className="rounded-xl border border-border px-4 py-6 text-sm text-muted-foreground text-center">
+                Loading attendance rows...
+              </div>
+            ) : sheetRows.length === 0 ? (
               <div className="rounded-xl border border-border px-4 py-6 text-sm text-muted-foreground text-center">
                 No workers available for attendance yet.
               </div>
@@ -702,7 +755,7 @@ export default function WorkerAttendance() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={closeSheetModal}>Cancel</Button>
-            <Button onClick={handleSheetSave} disabled={sheetSaving || sheetRows.length === 0}>
+            <Button onClick={handleSheetSave} disabled={sheetSaving || sheetLoading || sheetRows.length === 0}>
               {sheetSaving ? "Saving..." : "Save Attendance Sheet"}
             </Button>
           </div>

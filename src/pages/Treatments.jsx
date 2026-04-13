@@ -28,7 +28,7 @@ import { getIncidentTitle } from "@/lib/incidents.js";
 import { cn } from "@/lib/utils";
 import { createPageUrl } from "@/utils";
 
-const TYPES = ["chemical", "biological", "physical", "repair", "inspection", "preventive", "cultural", "other"];
+const TYPES = ["treatment", "physical", "repair", "inspection", "preventive", "cultural", "other"];
 const OUTCOMES = ["pending", "effective", "partial", "ineffective"];
 const TARGET_MODES = [
   { value: "single", label: "One house", description: "Link the response to one greenhouse." },
@@ -45,7 +45,7 @@ const createDefaultForm = () => ({
   greenhouse_id: "",
   incident_id: "",
   date: new Date().toISOString().slice(0, 10),
-  treatment_type: "chemical",
+  treatment_type: "treatment",
   chemical_name: "",
   dose: "",
   applicator: "",
@@ -54,8 +54,9 @@ const createDefaultForm = () => ({
 });
 
 const RESPONSE_TYPE_LABELS = {
-  chemical: "Chemical",
-  biological: "Biological",
+  treatment: "Treatment",
+  chemical: "Treatment",
+  biological: "Treatment",
   physical: "Physical",
   repair: "Repair",
   inspection: "Inspection",
@@ -69,6 +70,12 @@ const humanizeValue = (value) =>
     .trim()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const normalizeResponseType = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "chemical" || normalized === "biological") return "treatment";
+  return normalized || "treatment";
+};
 
 const getResponseTypeLabel = (value) => RESPONSE_TYPE_LABELS[String(value || "").trim().toLowerCase()] || humanizeValue(value) || "Response";
 
@@ -298,6 +305,7 @@ export default function Treatments() {
       ...record,
       greenhouse_id: record.greenhouse_id || "",
       incident_id: record.incident_id || "",
+      treatment_type: normalizeResponseType(record.treatment_type),
       outcome: record.outcome || "pending",
     });
     setTargetMode("single");
@@ -367,11 +375,12 @@ export default function Treatments() {
     }));
   };
 
-  const buildResponsePayload = ({ greenhouseId, incidentId, outcome = form.outcome }) => ({
-    ...form,
-    greenhouse_id: greenhouseId,
-    incident_id: incidentId || null,
-    outcome,
+const buildResponsePayload = ({ greenhouseId, incidentId, outcome = form.outcome }) => ({
+  ...form,
+  treatment_type: normalizeResponseType(form.treatment_type),
+  greenhouse_id: greenhouseId,
+  incident_id: incidentId || null,
+  outcome,
   });
 
   const handleSave = async () => {

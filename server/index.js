@@ -5,7 +5,7 @@ import multer from "multer";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID, randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -30,6 +30,7 @@ const CALENDAR_EVENT_ENTITY = "CalendarEvent";
 const ACTIVITY_LOG_ENTITY = "ActivityLog";
 const REMINDER_LOG_ENTITY = "EventReminderLog";
 const INTERNAL_SERVER_ONLY_ENTITIES = new Set([ACTIVITY_LOG_ENTITY, REMINDER_LOG_ENTITY]);
+const ATTENDANCE_BOOTSTRAP_WINDOW_DAYS = 60;
 
 const toPositiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -193,6 +194,10 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
 const normalizeFilterValue = (raw) => {
   if (raw === "null") return null;
   if (raw === "true") return true;
@@ -239,6 +244,192 @@ const sortItems = (items, sortParam) => {
     if (av < bv) return -direction;
     return 0;
   });
+};
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const JSON_TEXT_FIELD_ALLOWLIST = new Set(["date", "log_date", "hire_date", "created_date", "updated_date"]);
+
+const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
+const getDateDaysAgo = (days) => {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - Math.max(0, Number(days) || 0));
+  return date.toISOString().slice(0, 10);
+};
+
+const normalizeDateKey = (value) => {
+  const text = String(value || "").trim();
+  return DATE_KEY_RE.test(text) ? text : null;
+};
+
+const resolveDateRange = (query, defaultWindowDays = null) => {
+  let fromDate = normalizeDateKey(query?.from_date);
+  let toDate = normalizeDateKey(query?.to_date) || getTodayKey();
+
+  if (!fromDate && defaultWindowDays) {
+    fromDate = getDateDaysAgo(Math.max(0, defaultWindowDays - 1));
+  }
+
+  if (fromDate && toDate && fromDate > toDate) {
+    [fromDate, toDate] = [toDate, fromDate];
+  }
+
+  return { fromDate, toDate };
+};
+
+const isListSafeImageUrl = (value) => {
+  const text = String(value || "").trim();
+  return Boolean(text) && (text.startsWith("/") || /^https?:\/\//i.test(text));
+};
+
+const summarizeWorker = (user, worker) => {
+  const picture = String(worker?.profile_picture || "").trim();
+  return sanitizeEntityDataForUser(user, "Worker", {
+    id: worker?.id || null,
+    full_name: worker?.full_name || "",
+    role: worker?.role || "",
+    phone: worker?.phone || "",
+    greenhouse_id: worker?.greenhouse_id || null,
+    hire_date: worker?.hire_date || null,
+    status: worker?.status || "active",
+    salary: worker?.salary ?? null,
+    profile_picture: isListSafeImageUrl(picture) ? picture : null,
+    has_profile_picture: Boolean(picture),
+    created_date: worker?.created_date || null,
+    updated_date: worker?.updated_date || null,
+  });
+};
+
+const summarizeGreenhouse = (greenhouse) => ({
+  id: greenhouse?.id || null,
+  code: greenhouse?.code || "",
+  name: greenhouse?.name || "",
+  status: greenhouse?.status || "active",
+  created_date: greenhouse?.created_date || null,
+  updated_date: greenhouse?.updated_date || null,
+});
+
+const summarizeWorkerRole = (role) => ({
+  id: role?.id || null,
+  key: role?.key || null,
+  name: role?.name || "",
+  status: role?.status || "active",
+  created_date: role?.created_date || null,
+  updated_date: role?.updated_date || null,
+});
+
+const getJsonTextExpr = (fieldName) => {
+  if (!JSON_TEXT_FIELD_ALLOWLIST.has(fieldName)) {
+    throw new Error(`Unsupported JSON text field for raw query: ${fieldName}`);
+  }
+  return Prisma.raw(`COALESCE(data ->> '${fieldName}', '')`);
+};
+
+const queryWorkerSummaries = async () =>
+  prisma.$queryRaw`
+    SELECT
+      id,
+      created_at,
+      updated_at,
+      data ->> 'full_name' AS full_name,
+      data ->> 'role' AS role,
+      data ->> 'phone' AS phone,
+      NULLIF(data ->> 'greenhouse_id', '') AS greenhouse_id,
+      NULLIF(data ->> 'hire_date', '') AS hire_date,
+      COALESCE(NULLIF(data ->> 'status', ''), 'active') AS status,
+      NULLIF(data ->> 'profile_picture', '') AS profile_picture,
+      NULLIF(data ->> 'salary', '') AS salary
+    FROM "EntityRecord"
+    WHERE entity = 'Worker'
+    ORDER BY LOWER(COALESCE(data ->> 'full_name', '')) ASC, updated_at DESC
+  `;
+
+const loadWorkerSummaries = async (user) => {
+  try {
+    const rows = await queryWorkerSummaries();
+    return rows.map((worker) => {
+      const salary = worker?.salary == null || worker.salary === "" ? null : Number(worker.salary);
+      return summarizeWorker(user, {
+        ...worker,
+        salary: Number.isFinite(salary) ? salary : null,
+        created_date: worker?.created_at?.toISOString?.() || null,
+        updated_date: worker?.updated_at?.toISOString?.() || null,
+      });
+    });
+  } catch (error) {
+    console.warn("Falling back to ORM worker summaries after raw query failure:", error);
+    const workerRows = await prisma.entityRecord.findMany({ where: { entity: "Worker" } });
+    return workerRows
+      .map(toEntityOutput)
+      .map((worker) => summarizeWorker(user, worker))
+      .sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || "")));
+  }
+};
+
+const queryEntityRowsByDate = async ({
+  entity,
+  dateField = "date",
+  fromDate = null,
+  toDate = null,
+  exactDate = null,
+  limit = null,
+}) => {
+  const dateExpr = getJsonTextExpr(dateField);
+  let whereSql = Prisma.sql`entity = ${entity}`;
+
+  if (exactDate) {
+    whereSql = Prisma.sql`${whereSql} AND ${dateExpr} = ${exactDate}`;
+  } else {
+    if (fromDate) whereSql = Prisma.sql`${whereSql} AND ${dateExpr} >= ${fromDate}`;
+    if (toDate) whereSql = Prisma.sql`${whereSql} AND ${dateExpr} <= ${toDate}`;
+  }
+
+  const limitClause = limit != null ? Prisma.sql`LIMIT ${Math.max(1, Number(limit) || 1)}` : Prisma.empty;
+
+  return prisma.$queryRaw`
+    SELECT id, data, created_at, updated_at
+    FROM "EntityRecord"
+    WHERE ${whereSql}
+    ORDER BY ${dateExpr} DESC, updated_at DESC
+    ${limitClause}
+  `;
+};
+
+const filterEntityItemsByDate = ({ items, dateField = "date", fromDate = null, toDate = null, exactDate = null }) =>
+  items.filter((item) => {
+    const dateValue = String(item?.[dateField] || "").trim();
+    if (!dateValue) return false;
+    if (exactDate) return dateValue === exactDate;
+    if (fromDate && dateValue < fromDate) return false;
+    if (toDate && dateValue > toDate) return false;
+    return true;
+  });
+
+const loadEntityItemsByDate = async ({
+  entity,
+  dateField = "date",
+  fromDate = null,
+  toDate = null,
+  exactDate = null,
+  limit = null,
+}) => {
+  try {
+    const rows = await queryEntityRowsByDate({ entity, dateField, fromDate, toDate, exactDate, limit });
+    return rows.map(toEntityOutput);
+  } catch (error) {
+    console.warn(`Falling back to ORM ${entity} query after raw query failure:`, error);
+    const rows = await prisma.entityRecord.findMany({ where: { entity } });
+    const filtered = filterEntityItemsByDate({
+      items: rows.map(toEntityOutput),
+      dateField,
+      fromDate,
+      toDate,
+      exactDate,
+    }).sort((a, b) => String(b[dateField] || "").localeCompare(String(a[dateField] || "")));
+
+    return limit ? filtered.slice(0, limit) : filtered;
+  }
 };
 
 const sendSse = (res, data) => {
@@ -913,6 +1104,81 @@ app.use(
   })
 );
 
+app.get("/api/workers/bootstrap", requireAuth, asyncHandler(async (req, res) => {
+  const [workers, greenhouseRows, roleRows] = await Promise.all([
+    loadWorkerSummaries(req.user),
+    prisma.entityRecord.findMany({ where: { entity: "Greenhouse" } }),
+    prisma.entityRecord.findMany({ where: { entity: "WorkerRole" } }),
+  ]);
+
+  const greenhouses = greenhouseRows
+    .map(toEntityOutput)
+    .map(summarizeGreenhouse)
+    .sort((a, b) => String(a.code || "").localeCompare(String(b.code || "")));
+
+  const roles = roleRows
+    .map(toEntityOutput)
+    .map(summarizeWorkerRole)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+
+  res.json({ workers, greenhouses, roles });
+}));
+
+app.get("/api/worker-attendance/bootstrap", requireAuth, asyncHandler(async (req, res) => {
+  const { fromDate, toDate } = resolveDateRange(req.query, ATTENDANCE_BOOTSTRAP_WINDOW_DAYS);
+
+  const [records, grievances, workers, greenhouseRows] = await Promise.all([
+    loadEntityItemsByDate({
+      entity: "WorkerAttendance",
+      dateField: "date",
+      fromDate,
+      toDate,
+      limit: 2000,
+    }),
+    loadEntityItemsByDate({
+      entity: "WorkerGrievance",
+      dateField: "date",
+      fromDate,
+      toDate,
+      limit: 1200,
+    }),
+    loadWorkerSummaries(req.user),
+    prisma.entityRecord.findMany({ where: { entity: "Greenhouse" } }),
+  ]);
+
+  const greenhouses = greenhouseRows
+    .map(toEntityOutput)
+    .map(summarizeGreenhouse)
+    .sort((a, b) => String(a.code || "").localeCompare(String(b.code || "")));
+
+  res.json({
+    window: {
+      from_date: fromDate,
+      to_date: toDate,
+    },
+    records: records.map((item) => sanitizeEntityDataForUser(req.user, "WorkerAttendance", item)),
+    grievances: grievances.map((item) => sanitizeEntityDataForUser(req.user, "WorkerGrievance", item)),
+    workers,
+    greenhouses,
+  });
+}));
+
+app.get("/api/worker-attendance/day", requireAuth, asyncHandler(async (req, res) => {
+  const date = normalizeDateKey(req.query.date);
+  if (!date) {
+    return res.status(400).json({ error: "Valid attendance date is required" });
+  }
+
+  const rows = await loadEntityItemsByDate({
+    entity: "WorkerAttendance",
+    dateField: "date",
+    exactDate: date,
+    limit: 1000,
+  });
+
+  res.json(rows.map((item) => sanitizeEntityDataForUser(req.user, "WorkerAttendance", item)));
+}));
+
 app.get("/api/entities/:entity", requireAuth, async (req, res) => {
   const { entity } = req.params;
   const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;
@@ -965,6 +1231,31 @@ app.get("/api/entities/:entity/filter", requireAuth, async (req, res) => {
   );
   res.json(items.filter((item) => matchesFilter(item, filters)));
 });
+
+app.get("/api/entities/:entity/:id", requireAuth, asyncHandler(async (req, res) => {
+  const { entity, id } = req.params;
+
+  if (!canReadEntity(req.user, entity)) {
+    return res.status(403).json({ error: "You do not have permission to view this data" });
+  }
+
+  if (entity === "User") {
+    if (!isAdmin(req.user) && req.user.id !== id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    return res.json(toPublicUser(user));
+  }
+
+  const row = await prisma.entityRecord.findUnique({ where: { id } });
+  if (!row || row.entity !== entity) {
+    return res.status(404).json({ error: `${entity} record not found` });
+  }
+
+  res.json(sanitizeEntityDataForUser(req.user, entity, toEntityOutput(row)));
+}));
 
 app.post("/api/entities/:entity", requireAuth, async (req, res) => {
   const { entity } = req.params;
@@ -1407,8 +1698,8 @@ app.get("/api/events", async (req, res) => {
   }
 });
 
-app.use((err, _req, res, _next) => {
-  console.error(err);
+app.use((err, req, res, _next) => {
+  console.error(`Request failed: ${req.method} ${req.originalUrl}`, err);
   res.status(500).json({ error: "Internal server error" });
 });
 

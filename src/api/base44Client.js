@@ -85,6 +85,18 @@ const request = async (path, { method = "GET", data, auth = true, isFormData = f
   return response.json();
 };
 
+const buildQueryString = (params = {}) => {
+  const search = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value == null || value === "") return;
+    search.set(key, String(value));
+  });
+
+  const text = search.toString();
+  return text ? `?${text}` : "";
+};
+
 const closeEvents = () => {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -173,11 +185,7 @@ const subscribeEntity = (entityName, callback) => {
 
 const createEntityClient = (entityName) => ({
   async list(sort, limit) {
-    const params = new URLSearchParams();
-    if (sort) params.set("sort", String(sort));
-    if (limit != null) params.set("limit", String(limit));
-    const suffix = params.toString() ? `?${params.toString()}` : "";
-    return request(`/api/entities/${entityName}${suffix}`);
+    return request(`/api/entities/${entityName}${buildQueryString({ sort, limit })}`);
   },
 
   async filter(filters = {}) {
@@ -188,6 +196,10 @@ const createEntityClient = (entityName) => ({
     });
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request(`/api/entities/${entityName}/filter${suffix}`);
+  },
+
+  async get(id) {
+    return request(`/api/entities/${entityName}/${id}`);
   },
 
   async create(data) {
@@ -316,6 +328,22 @@ export const base44 = {
         method: "POST",
         data: { to },
       });
+    },
+  },
+
+  workers: {
+    async bootstrap() {
+      return request("/api/workers/bootstrap");
+    },
+  },
+
+  attendance: {
+    async bootstrap({ from_date, to_date } = {}) {
+      return request(`/api/worker-attendance/bootstrap${buildQueryString({ from_date, to_date })}`);
+    },
+
+    async day(date) {
+      return request(`/api/worker-attendance/day${buildQueryString({ date })}`);
     },
   },
 

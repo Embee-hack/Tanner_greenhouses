@@ -11,6 +11,7 @@ import PageHeader from "@/components/shared/PageHeader";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import FormField from "@/components/shared/FormField";
 import StatusBadge from "@/components/shared/StatusBadge";
+import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import { useCurrency } from "@/components/shared/CurrencyProvider";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -49,6 +50,35 @@ const toCatalogRole = (rawRole) => {
   };
 };
 
+const getWorkerInitials = (name) =>
+  String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "?";
+
+const toWorkerListItem = (worker) => {
+  const picture = String(worker?.profile_picture || "").trim();
+  const safePicture = picture && (picture.startsWith("/") || /^https?:\/\//i.test(picture)) ? picture : null;
+
+  return {
+    id: worker?.id || null,
+    full_name: worker?.full_name || "",
+    role: worker?.role || "",
+    phone: worker?.phone || "",
+    greenhouse_id: worker?.greenhouse_id || null,
+    hire_date: worker?.hire_date || null,
+    status: worker?.status || "active",
+    salary: worker?.salary ?? null,
+    profile_picture: safePicture,
+    has_profile_picture: Boolean(picture),
+    created_date: worker?.created_date || null,
+    updated_date: worker?.updated_date || null,
+  };
+};
+
 export default function Workers() {
   const { fmt } = useCurrency();
   const { user } = useAuth();
@@ -59,29 +89,30 @@ export default function Workers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [detailWorker, setDetailWorker] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [photoError, setPhotoError] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
+  const detailRequestRef = useRef(0);
   const [newRoleName, setNewRoleName] = useState("");
   const [editingRole, setEditingRole] = useState(null);
   const [roleError, setRoleError] = useState("");
   const [savingRole, setSavingRole] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
 
   const load = async () => {
     try {
       setLoading(true);
-      const [workersData, greenhouseData, rolesData] = await Promise.all([
-        base44.entities.Worker.list(),
-        base44.entities.Greenhouse.list(),
-        base44.entities.WorkerRole.list("name"),
-      ]);
-      setWorkers(workersData);
-      setGreenhouses(greenhouseData);
-      setRoleCatalog(rolesData);
+      const data = await base44.workers.bootstrap();
+      setWorkers(data?.workers || []);
+      setGreenhouses(data?.greenhouses || []);
+      setRoleCatalog(data?.roles || []);
       setLoadError("");
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load workers."));
@@ -139,7 +170,15 @@ export default function Workers() {
     return roleNameByKey[key] || roleLabelFromKey(key);
   };
 
+  const sortedWorkers = useMemo(
+    () => [...workers].sort((a, b) => String(a.full_name || "").localeCompare(String(b.full_name || ""))),
+    [workers]
+  );
+
   const openCreate = () => {
+    detailRequestRef.current += 1;
+    setDetailWorker(null);
+    setDetailLoading(false);
     setEditing(null);
     setPhotoError("");
     setError("");
@@ -154,6 +193,9 @@ export default function Workers() {
   };
 
   const openEdit = (worker) => {
+    detailRequestRef.current += 1;
+    setDetailWorker(null);
+    setDetailLoading(false);
     setEditing(worker);
     setPhotoError("");
     setError("");
@@ -179,10 +221,10 @@ export default function Workers() {
 
       if (editing) {
         const updated = await base44.entities.Worker.update(editing.id, payload);
-        setWorkers((prev) => prev.map((worker) => (worker.id === editing.id ? updated : worker)));
+        setWorkers((prev) => prev.map((worker) => (worker.id === editing.id ? toWorkerListItem(updated) : worker)));
       } else {
         const created = await base44.entities.Worker.create(payload);
-        setWorkers((prev) => [...prev, created]);
+        setWorkers((prev) => [...prev, toWorkerListItem(created)]);
       }
 
       setShowModal(false);
@@ -191,12 +233,46 @@ export default function Workers() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async () => {
+    if (!deleteDialog) return;
+
+    setDeleting(true);
     try {
-      await base44.entities.Worker.delete(id);
-      setWorkers((prev) => prev.filter((worker) => worker.id !== id));
+      if (deleteDialog.kind === "worker") {
+        await base44.entities.Worker.delete(deleteDialog.item.id);
+        setWorkers((prev) => prev.filter((worker) => worker.id !== deleteDialog.item.id));
+        if (detailWorker?.id === deleteDialog.item.id) {
+          detailRequestRef.current += 1;
+          setDetailWorker(null);
+          setDetailLoading(false);
+        }
+      } else {
+        const role = deleteDialog.item;
+        const inUse = workers.some((worker) => normalizeRoleKey(worker.role) === role.key);
+        if (inUse) {
+          setRoleError("This role is currently assigned to one or more workers. Reassign them first.");
+          setDeleteDialog(null);
+          return;
+        }
+
+        await base44.entities.WorkerRole.delete(role.id);
+        setRoleCatalog((prev) => prev.filter((item) => item.id !== role.id));
+        if (editingRole?.id === role.id) {
+          setEditingRole(null);
+          setNewRoleName("");
+        }
+      }
+
+      setDeleteDialog(null);
     } catch (err) {
-      setLoadError(getErrorMessage(err, "Failed to delete worker."));
+      const fallback = deleteDialog.kind === "worker" ? "Failed to delete worker." : "Failed to delete worker role.";
+      if (deleteDialog.kind === "worker") {
+        setLoadError(getErrorMessage(err, fallback));
+      } else {
+        setRoleError(getErrorMessage(err, fallback));
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -252,21 +328,6 @@ export default function Workers() {
     }
   };
 
-  const handleDeleteCustomRole = async (role) => {
-    const inUse = workers.some((worker) => normalizeRoleKey(worker.role) === role.key);
-    if (inUse) {
-      setRoleError("This role is currently assigned to one or more workers. Reassign them first.");
-      return;
-    }
-
-    try {
-      await base44.entities.WorkerRole.delete(role.id);
-      setRoleCatalog((prev) => prev.filter((item) => item.id !== role.id));
-    } catch (err) {
-      setRoleError(getErrorMessage(err, "Failed to delete worker role."));
-    }
-  };
-
   const openPhotoPicker = () => {
     if (!uploadingPhoto) photoInputRef.current?.click();
   };
@@ -287,18 +348,36 @@ export default function Workers() {
 
     try {
       setUploadingPhoto(true);
-      const dataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (evt) => resolve(evt.target.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      setForm((prev) => ({ ...prev, profile_picture: dataUrl }));
+      const upload = await base44.integrations.Core.UploadFile({ file });
+      if (!upload?.file_url) {
+        throw new Error("Photo upload did not return a file URL.");
+      }
+      setForm((prev) => ({ ...prev, profile_picture: upload.file_url }));
     } catch (_error) {
-      setPhotoError("Photo processing failed. Please try again.");
+      setPhotoError("Photo upload failed. Please try again.");
     } finally {
       setUploadingPhoto(false);
       if (e.target) e.target.value = "";
+    }
+  };
+
+  const openDetail = async (worker) => {
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
+    setDetailWorker(worker);
+    setDetailLoading(true);
+    try {
+      const detail = await base44.entities.Worker.get(worker.id);
+      if (detailRequestRef.current !== requestId) return;
+      setDetailWorker(detail);
+      setLoadError("");
+    } catch (err) {
+      if (detailRequestRef.current !== requestId) return;
+      setLoadError(getErrorMessage(err, "Failed to load worker details."));
+    } finally {
+      if (detailRequestRef.current === requestId) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -331,9 +410,9 @@ export default function Workers() {
       <ErrorBanner message={loadError} onRetry={load} />
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="space-y-3">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-52 bg-muted animate-pulse rounded-2xl" />
+            <div key={i} className="h-24 bg-muted animate-pulse rounded-3xl" />
           ))}
         </div>
       ) : workers.length === 0 ? (
@@ -343,56 +422,72 @@ export default function Workers() {
           <p className="text-sm">Add your first worker to get started</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {workers.map((worker) => (
-            <div key={worker.id} className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col group hover:shadow-lg transition-shadow">
-              <div className="w-full h-44 bg-gradient-to-br from-primary/20 to-primary/5 overflow-hidden flex items-center justify-center">
-                {worker.profile_picture ? (
-                  <img src={worker.profile_picture} alt={worker.full_name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-20 h-20 rounded-xl bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
-                      {(worker.full_name || "?")[0].toUpperCase()}
+        <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+          <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_auto] gap-4 border-b border-border bg-muted/30 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
+            <div>Worker</div>
+            <div>Assignment</div>
+            <div>Contact</div>
+            <div className="text-right">Status</div>
+          </div>
+          <div className="divide-y divide-border">
+            {sortedWorkers.map((worker) => (
+              <div key={worker.id} className="p-3 sm:p-4">
+                <button
+                  type="button"
+                  onClick={() => openDetail(worker)}
+                  className="w-full min-w-0 rounded-2xl border border-border/70 bg-background/70 px-4 py-4 text-left transition-all hover:border-primary/30 hover:bg-muted/40 hover:shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div className="flex min-w-0 items-center gap-3 lg:w-[320px]">
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl border border-border bg-primary/10">
+                        {worker.profile_picture ? (
+                          <img src={worker.profile_picture} alt={worker.full_name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-lg font-bold text-primary">
+                            {getWorkerInitials(worker.full_name)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-semibold text-foreground">{worker.full_name}</div>
+                        <div className="mt-1 text-sm text-muted-foreground">{roleLabel(worker.role)}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl bg-muted/50 px-3 py-3">
+                        <div className="text-xs text-muted-foreground">Assigned House</div>
+                        <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span>{worker.greenhouse_id ? ghName(worker.greenhouse_id) : "Not assigned"}</span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-muted/50 px-3 py-3">
+                        <div className="text-xs text-muted-foreground">Contact</div>
+                        <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span>{worker.phone || "No phone number"}</span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-muted/50 px-3 py-3">
+                        <div className="text-xs text-muted-foreground">{isAdmin ? "Employment" : "Hire Date"}</div>
+                        <div className="mt-1 text-sm font-medium text-foreground">
+                          {isAdmin && worker.salary > 0 ? `${fmt(worker.salary)}/mo` : worker.hire_date ? `Hired ${worker.hire_date}` : "No hire date"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 lg:w-[170px] lg:justify-end">
+                      <StatusBadge status={worker.status} />
+                      <span className="text-sm font-semibold text-primary">View details</span>
                     </div>
                   </div>
-                )}
+                </button>
               </div>
-              <div className="p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="font-semibold text-foreground text-sm leading-tight">{worker.full_name}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{roleLabel(worker.role)}</div>
-                  </div>
-                  <StatusBadge status={worker.status} />
-                </div>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {worker.phone && (
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{worker.phone}</span>
-                    </div>
-                  )}
-                  {worker.greenhouse_id && (
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="w-3 h-3 flex-shrink-0" />
-                      {ghName(worker.greenhouse_id)}
-                    </div>
-                  )}
-                  {isAdmin && worker.salary > 0 && <div className="text-foreground font-medium">{fmt(worker.salary)}/mo</div>}
-                  {worker.hire_date && <div className="text-xs">Hired {worker.hire_date}</div>}
-                </div>
-                <div className="flex gap-2 mt-auto pt-3 border-t border-border">
-                  <Button variant="ghost" size="sm" className="flex-1 h-7 text-xs" onClick={() => openEdit(worker)}>
-                    <Pencil className="w-3 h-3 mr-1" />
-                    Edit
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs text-danger hover:text-danger" onClick={() => handleDelete(worker.id)}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -523,6 +618,124 @@ export default function Workers() {
         </div>
       </Modal>
 
+      <Modal
+        open={!!detailWorker}
+        title="Worker Details"
+        onClose={() => {
+          detailRequestRef.current += 1;
+          setDetailLoading(false);
+          setDetailWorker(null);
+        }}
+        size="lg"
+      >
+        {detailWorker ? (
+          <div className="space-y-5">
+            {detailLoading ? (
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
+                Loading full worker record...
+              </div>
+            ) : null}
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl border border-border bg-primary/10">
+                  {detailWorker.profile_picture ? (
+                    <img src={detailWorker.profile_picture} alt={detailWorker.full_name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-primary">
+                      {getWorkerInitials(detailWorker.full_name)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-2xl font-bold text-foreground">{detailWorker.full_name}</h3>
+                    <StatusBadge status={detailWorker.status} size="md" />
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-muted-foreground">{roleLabel(detailWorker.role)}</div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="rounded-full border border-border bg-card px-2.5 py-1">
+                      {detailWorker.greenhouse_id ? `Assigned to ${ghName(detailWorker.greenhouse_id)}` : "No greenhouse assigned"}
+                    </span>
+                    <span className="rounded-full border border-border bg-card px-2.5 py-1">
+                      {detailWorker.phone || "No phone number"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role</div>
+                <div className="mt-1 text-sm font-medium text-foreground">{roleLabel(detailWorker.role)}</div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Phone Number</div>
+                <div className="mt-1 text-sm font-medium text-foreground">{detailWorker.phone || "—"}</div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned Greenhouse</div>
+                <div className="mt-1 text-sm font-medium text-foreground">{detailWorker.greenhouse_id ? ghName(detailWorker.greenhouse_id) : "Not assigned"}</div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hire Date</div>
+                <div className="mt-1 text-sm font-medium text-foreground">{detailWorker.hire_date || "—"}</div>
+              </div>
+
+              {isAdmin ? (
+                <div className="rounded-xl border border-border p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Monthly Salary</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">
+                    {detailWorker.salary > 0 ? `${fmt(detailWorker.salary)}/mo` : "—"}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</div>
+                <div className="mt-2">
+                  <StatusBadge status={detailWorker.status} size="md" />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4 md:col-span-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</div>
+                <div className="mt-1 text-sm font-medium text-foreground">{detailWorker.notes || "No notes added."}</div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setDetailWorker(null)}>
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                disabled={detailLoading}
+                onClick={() => {
+                  setDetailWorker(null);
+                  openEdit(detailWorker);
+                }}
+              >
+                <Pencil className="w-4 h-4 mr-1" />
+                Edit Worker
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={detailLoading}
+                onClick={() => setDeleteDialog({ kind: "worker", item: detailWorker })}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete Worker
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
       <Modal open={showRoleModal && isAdmin} title="Manage Worker Roles" onClose={() => setShowRoleModal(false)}>
         <div className="space-y-4">
           {roleError && <div className="text-sm rounded-lg px-3 py-2 bg-danger/10 text-danger">{roleError}</div>}
@@ -566,7 +779,7 @@ export default function Workers() {
                       variant="ghost"
                       size="sm"
                       className="h-8 text-danger hover:text-danger"
-                      onClick={() => handleDeleteCustomRole(role)}
+                      onClick={() => setDeleteDialog({ kind: "role", item: role })}
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
                       Delete
@@ -578,6 +791,22 @@ export default function Workers() {
           </div>
         </div>
       </Modal>
+
+      <DeleteConfirmDialog
+        open={!!deleteDialog}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDialog(null);
+        }}
+        title={deleteDialog?.kind === "role" ? "Delete this worker role?" : "Delete this worker?"}
+        description={
+          deleteDialog?.kind === "role"
+            ? "This custom worker role will be removed from the role catalog. Reassign any workers using it first."
+            : "This worker record will be removed from the app. This action cannot be undone."
+        }
+        confirmLabel={deleteDialog?.kind === "role" ? "Delete Role" : "Delete Worker"}
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
