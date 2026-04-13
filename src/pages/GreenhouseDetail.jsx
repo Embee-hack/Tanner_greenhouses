@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import StatusBadge from "@/components/shared/StatusBadge.jsx";
 import { useAuth } from "@/lib/AuthContext";
 import { getErrorMessage } from "@/lib/errors.js";
 import { formatIncidentAffectedPlants, getIncidentTitle, getIncidentTypeLabel, isIncidentActive } from "@/lib/incidents.js";
@@ -10,7 +11,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
   ArrowLeft, Sprout, TrendingUp, DollarSign, Package,
-  Leaf, BarChart2, AlertTriangle, FlaskConical
+  Leaf, BarChart2, AlertTriangle, FlaskConical, CalendarDays
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from "recharts";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,33 @@ const statusDot = {
   in_progress: "bg-amber-500",
   monitoring: "bg-blue-500",
   resolved: "bg-emerald-500",
+};
+
+const truncateText = (value, maxLength = 110) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+};
+
+const getNurseryApplicationsSummary = (log) => {
+  const items = [
+    log?.pesticide_applied ? `Pesticide: ${log.pesticide_applied}` : "",
+    log?.fungicide_applied ? `Fungicide: ${log.fungicide_applied}` : "",
+    log?.nutrients_applied ? `Nutrients: ${log.nutrients_applied}` : "",
+  ].filter(Boolean);
+
+  return items.length > 0 ? truncateText(items.join(" · ")) : "No products logged";
+};
+
+const getNurseryWateringSummary = (log) => {
+  const parts = [];
+  if (Number(log?.fertigation_intervals || 0) > 0) {
+    parts.push(`Fertigation ${log.fertigation_intervals} x ${log.fertigation_minutes_per_interval || 0} min`);
+  }
+  if (Number(log?.irrigation_intervals || 0) > 0) {
+    parts.push(`Irrigation ${log.irrigation_intervals} x ${log.irrigation_minutes_per_interval || 0} min`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "No watering intervals logged";
 };
 
 function StatBox({ label, value, icon: Icon, color }) {
@@ -57,6 +85,8 @@ export default function GreenhouseDetail() {
   const [incidents, setIncidents] = useState([]);
   const [treatments, setTreatments] = useState([]);
   const [popLogs, setPopLogs] = useState([]);
+  const [nurseryBatches, setNurseryBatches] = useState([]);
+  const [nurseryLogs, setNurseryLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -64,7 +94,7 @@ export default function GreenhouseDetail() {
     if (!id) return;
     try {
       setLoading(true);
-      const [ghRes, cy, ha, sa, ex, inc, tr, po] = await Promise.all([
+      const [ghRes, cy, ha, sa, ex, inc, tr, po, nb, nl] = await Promise.all([
         base44.entities.Greenhouse.filter({ id }),
         base44.entities.CropCycle.filter({ greenhouse_id: id }),
         base44.entities.HarvestRecord.filter({ greenhouse_id: id }),
@@ -73,6 +103,8 @@ export default function GreenhouseDetail() {
         base44.entities.Incident.filter({ greenhouse_id: id }),
         base44.entities.Treatment.filter({ greenhouse_id: id }),
         base44.entities.PlantPopulationLog.filter({ greenhouse_id: id }),
+        base44.entities.NurseryBatch.filter({ greenhouse_id: id }),
+        base44.entities.NurseryDailyLog.filter({ greenhouse_id: id }),
       ]);
       setGh(ghRes[0]);
       setCycles(cy);
@@ -82,6 +114,8 @@ export default function GreenhouseDetail() {
       setIncidents(inc);
       setTreatments(tr);
       setPopLogs(po);
+      setNurseryBatches(nb);
+      setNurseryLogs(nl);
       setLoadError("");
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load greenhouse details."));
@@ -118,6 +152,10 @@ export default function GreenhouseDetail() {
   const activePlants = latestPop?.active_plants || activeCycle?.plants_planted || 0;
   const yieldPerPlant = activePlants > 0 ? (totalKg / activePlants).toFixed(2) : null;
   const openIncidents = incidents.filter(i => isIncidentActive(i.status));
+  const activeNurseryBatches = nurseryBatches.filter((batch) => String(batch.status || "active") === "active");
+  const latestNurseryLog = nurseryLogs
+    .slice()
+    .sort((a, b) => String(b.log_date || "").localeCompare(String(a.log_date || "")))[0];
   const populationChart = popLogs
     .slice()
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
@@ -355,14 +393,85 @@ export default function GreenhouseDetail() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+            <Sprout className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Nursery Batches</h3>
+            <span className="ml-auto text-xs text-muted-foreground">{nurseryBatches.length} total</span>
+          </div>
+          {nurseryBatches.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No nursery batches linked to this house</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {nurseryBatches
+                .slice()
+                .sort((a, b) => String(b.date_planted || "").localeCompare(String(a.date_planted || "")))
+                .slice(0, 6)
+                .map((batch) => (
+                  <div key={batch.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {batch.seed_name || "Unnamed batch"}
+                        {batch.variety ? ` · ${batch.variety}` : ""}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {[batch.date_planted, `${Number(batch.seeds_planted || 0).toLocaleString()} seeds`, `${Number(batch.trays_used || 0).toLocaleString()} trays`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                      {batch.date_transplanted ? (
+                        <div className="text-xs text-muted-foreground mt-0.5">Transplanted: {batch.date_transplanted}</div>
+                      ) : null}
+                    </div>
+                    <StatusBadge status={batch.status || "active"} />
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold text-sm">Recent Nursery Logs</h3>
+            <span className="ml-auto text-xs text-muted-foreground">{nurseryLogs.length} total</span>
+          </div>
+          {nurseryLogs.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No nursery daily logs recorded for this house</div>
+          ) : (
+            <div className="divide-y divide-border max-h-72 overflow-y-auto">
+              {nurseryLogs
+                .slice()
+                .sort((a, b) => String(b.log_date || "").localeCompare(String(a.log_date || "")))
+                .slice(0, 6)
+                .map((log) => (
+                  <div key={log.id} className="px-5 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold">{log.log_date || "Date not set"}</div>
+                      <div className="text-xs text-muted-foreground">{getNurseryWateringSummary(log)}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">{getNurseryApplicationsSummary(log)}</div>
+                    {log.activities ? (
+                      <div className="text-xs text-muted-foreground mt-1">{truncateText(log.activities)}</div>
+                    ) : null}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Greenhouse Info */}
       <div className="bg-card rounded-xl border border-border p-5">
         <h3 className="font-semibold text-sm mb-3">Greenhouse Info</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
           <div><span className="text-muted-foreground block text-xs">Area</span><span className="font-semibold">{gh.area ? `${gh.area.toLocaleString()} m²` : "—"}</span></div>
           <div><span className="text-muted-foreground block text-xs">Plant Capacity</span><span className="font-semibold">{gh.capacity_plants ? gh.capacity_plants.toLocaleString() : "—"}</span></div>
           <div><span className="text-muted-foreground block text-xs">Cycles</span><span className="font-semibold">{cycles.length}</span></div>
           <div><span className="text-muted-foreground block text-xs">Responses</span><span className="font-semibold">{treatments.length}</span></div>
+          <div><span className="text-muted-foreground block text-xs">Active Nursery Batches</span><span className="font-semibold">{activeNurseryBatches.length}</span></div>
+          <div><span className="text-muted-foreground block text-xs">Latest Nursery Log</span><span className="font-semibold">{latestNurseryLog?.log_date || "—"}</span></div>
         </div>
       </div>
     </div>

@@ -90,6 +90,8 @@ function getPriorityForEvent(entityName, data) {
     if (data.quantity_in_stock <= data.reorder_level) return "high";
   }
   if (entityName === "Treatment") return "medium";
+  if (entityName === "NurseryBatch") return "info";
+  if (entityName === "NurseryDailyLog") return "info";
   if (entityName === "WorkerAttendance") return data?.status === "absent" ? "high" : "info";
   if (entityName === "CalendarEvent") return "medium";
   return "info";
@@ -111,6 +113,14 @@ function buildMessage(entityName, type, data) {
       return type === "create" ? `New sale: ${data?.kg_sold || 0} kg sold` : `Sales record updated`;
     case "Treatment":
       return type === "create" ? `Response logged: ${data?.treatment_type || ""}` : `Response updated`;
+    case "NurseryBatch":
+      return type === "create"
+        ? `Nursery batch added: ${data?.seed_name || "Seed batch"}`
+        : `Nursery batch updated: ${data?.seed_name || "Seed batch"}`;
+    case "NurseryDailyLog":
+      return type === "create"
+        ? `Nursery daily log recorded: ${data?.greenhouse_code || data?.greenhouse_name || "House"}`
+        : `Nursery daily log updated: ${data?.greenhouse_code || data?.greenhouse_name || "House"}`;
     case "WorkerAttendance":
       return type === "create"
         ? `Attendance marked: ${data?.worker_name || data?.name || "Worker"} (${data?.status || "recorded"})`
@@ -143,6 +153,8 @@ const CATEGORY_MAP = {
   ExpenseRecord: "expense",
   SalesRecord: "sales",
   Treatment: "treatment",
+  NurseryBatch: "nursery",
+  NurseryDailyLog: "nursery",
   WorkerAttendance: "attendance",
   WorkerGrievance: "grievance",
   CropCycle: "cycle",
@@ -157,6 +169,8 @@ const PAGE_LINK_MAP = {
   ExpenseRecord: "Expenses",
   SalesRecord: "Sales",
   Treatment: "Treatments",
+  NurseryBatch: "NurseryBatches",
+  NurseryDailyLog: "NurseryDailyLogs",
   WorkerAttendance: "WorkerAttendance",
   WorkerGrievance: "WorkerGrievances",
   CropCycle: "CropCycles",
@@ -242,7 +256,8 @@ export function initNotificationStore() {
 
   const entities = [
     "HarvestRecord", "Incident", "ExpenseRecord", "SalesRecord",
-    "Treatment", "WorkerAttendance", "WorkerGrievance", "CropCycle", "PlantPopulationLog", "InventoryItem", "CalendarEvent"
+    "Treatment", "NurseryBatch", "NurseryDailyLog", "WorkerAttendance", "WorkerGrievance",
+    "CropCycle", "PlantPopulationLog", "InventoryItem", "CalendarEvent"
   ];
 
   entities.forEach(entityName => {

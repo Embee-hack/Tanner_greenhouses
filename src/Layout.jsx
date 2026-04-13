@@ -46,6 +46,16 @@ const groupedNav = [
     ],
   },
   {
+    key: "nursery",
+    label: "Nursery",
+    icon: Leaf,
+    defaultOpen: false,
+    items: [
+      { label: "Nursery Batches", icon: Sprout, page: "NurseryBatches" },
+      { label: "Daily Nursery Logs", icon: Activity, page: "NurseryDailyLogs" },
+    ],
+  },
+  {
     key: "plant_health",
     label: "Plant Health",
     icon: Bug,

@@ -57,6 +57,8 @@ import Greenhouses from './pages/Greenhouses';
 import Harvests from './pages/Harvests';
 import Incidents from './pages/Incidents';
 import Inventory from './pages/Inventory';
+import NurseryBatches from './pages/NurseryBatches';
+import NurseryDailyLogs from './pages/NurseryDailyLogs';
 import Sales from './pages/Sales';
 import Treatments from './pages/Treatments';
 import UserManagement from './pages/UserManagement';
@@ -77,6 +79,8 @@ export const PAGES = {
     "Harvests": Harvests,
     "Incidents": Incidents,
     "Inventory": Inventory,
+    "NurseryBatches": NurseryBatches,
+    "NurseryDailyLogs": NurseryDailyLogs,
     "Sales": Sales,
     "Treatments": Treatments,
     "UserManagement": UserManagement,

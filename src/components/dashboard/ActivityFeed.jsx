@@ -27,6 +27,8 @@ const ENTITY_CONFIG = {
   Incident: { icon: AlertTriangle, color: "bg-red-100 text-red-700", label: "Incident" },
   ExpenseRecord: { icon: DollarSign, color: "bg-blue-100 text-blue-700", label: "Expense" },
   Treatment: { icon: FlaskConical, color: "bg-yellow-100 text-yellow-700", label: "Response" },
+  NurseryBatch: { icon: Sprout, color: "bg-emerald-100 text-emerald-700", label: "Nursery Batch" },
+  NurseryDailyLog: { icon: CalendarDays, color: "bg-teal-100 text-teal-700", label: "Nursery Log" },
   WorkerAttendance: { icon: CalendarDays, color: "bg-cyan-100 text-cyan-700", label: "Attendance" },
   WorkerGrievance: { icon: AlertTriangle, color: "bg-orange-100 text-orange-700", label: "Grievance" },
   SalesRecord: { icon: ShoppingCart, color: "bg-emerald-100 text-emerald-700", label: "Sale" },
@@ -100,6 +102,10 @@ const getActivitySource = (log) => {
       return { href: createPageUrl(`Incidents?incident=${encodeURIComponent(entityId)}`) };
     case "Treatment":
       return { href: createPageUrl(`Treatments?response=${encodeURIComponent(entityId)}`) };
+    case "NurseryBatch":
+      return { href: createPageUrl(`NurseryBatches?batch=${encodeURIComponent(entityId)}`) };
+    case "NurseryDailyLog":
+      return { href: createPageUrl(`NurseryDailyLogs?log=${encodeURIComponent(entityId)}`) };
     case "SalesRecord":
       return { href: createPageUrl(`Sales?sale=${encodeURIComponent(entityId)}`) };
     case "ExpenseRecord":

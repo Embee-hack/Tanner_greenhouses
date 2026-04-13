@@ -3,11 +3,13 @@ import { cn } from "@/lib/utils";
 const colorMap = {
   active: "bg-emerald-100 text-emerald-800 border-emerald-300",
   completed: "bg-blue-100 text-blue-800 border-blue-300",
+  transplanted: "bg-blue-100 text-blue-800 border-blue-300",
   inactive: "bg-slate-100 text-slate-700 border-slate-300",
   on_leave: "bg-amber-100 text-amber-800 border-amber-300",
   terminated: "bg-rose-100 text-rose-800 border-rose-300",
   maintenance: "bg-amber-100 text-amber-800 border-amber-300",
   abandoned: "bg-rose-100 text-rose-800 border-rose-300",
+  discarded: "bg-rose-100 text-rose-800 border-rose-300",
   open: "bg-rose-100 text-rose-800 border-rose-300",
   treated: "bg-violet-100 text-violet-800 border-violet-300",
   in_progress: "bg-violet-100 text-violet-800 border-violet-300",
@@ -35,6 +37,8 @@ const labelMap = {
   treated: "In progress",
   in_progress: "In progress",
   off_day: "Off day",
+  transplanted: "Transplanted",
+  discarded: "Discarded",
 };
 
 export default function StatusBadge({ status, size = "sm" }) {
