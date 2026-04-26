@@ -478,9 +478,9 @@ export default function Incidents() {
   };
 
   const columns = [
-    { key: "date", label: "Date" },
-    { key: "greenhouse_id", label: "Greenhouse", render: v => ghMap[v]?.code ?? "—" },
-    { key: "incident_type", label: "Type", render: v => getIncidentTypeLabel(v) },
+    { key: "date", label: "Date", noWrap: true },
+    { key: "greenhouse_id", label: "House", noWrap: true, render: v => ghMap[v]?.code ?? "—" },
+    { key: "incident_type", label: "Type", noWrap: true, render: v => getIncidentTypeLabel(v) },
     {
       key: "name",
       label: "Issue",
@@ -501,11 +501,11 @@ export default function Incidents() {
         </div>
       )},
     },
-    { key: "severity", label: "Severity", render: v => <StatusBadge status={v} /> },
-    { key: "affected_plants", label: "Affected", render: (_, row) => formatIncidentAffectedPlants(row) || "—" },
-    { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
+    { key: "severity", label: "Severity", noWrap: true, render: v => <StatusBadge status={v} /> },
+    { key: "affected_plants", label: "Affected", noWrap: true, render: (_, row) => formatIncidentAffectedPlants(row) || "—" },
+    { key: "status", label: "Status", noWrap: true, render: v => <StatusBadge status={v} /> },
     {
-      key: "id", label: "Actions",
+      key: "id", label: "Actions", noWrap: true, align: "right",
       render: (_, row) => (
         <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
           <DropdownMenu>

@@ -354,14 +354,14 @@ export default function CropCycles() {
   };
 
   const columns = [
-    { key: "greenhouse_id", label: "Greenhouse", render: (v) => <span className="font-semibold">{ghMap[v]?.code ?? v}</span> },
-    { key: "crop_type", label: "Crop" },
-    { key: "variety", label: "Variety", render: v => v || "—" },
-    { key: "planting_date", label: "Planted" },
-    { key: "plants_planted", label: "Plants", align: "right", render: v => v?.toLocaleString() ?? "—" },
-    { key: "status", label: "Status", render: v => <StatusBadge status={v} /> },
+    { key: "greenhouse_id", label: "House", noWrap: true, render: (v) => <span className="font-semibold">{ghMap[v]?.code ?? v}</span> },
+    { key: "crop_type", label: "Crop", noWrap: true },
+    { key: "variety", label: "Variety", noWrap: true, render: v => v || "—" },
+    { key: "planting_date", label: "Date Planted", noWrap: true },
+    { key: "plants_planted", label: "Plant Count", align: "right", noWrap: true, render: v => v?.toLocaleString() ?? "—" },
+    { key: "status", label: "Status", noWrap: true, render: v => <StatusBadge status={v} /> },
     {
-      key: "id", label: "Actions",
+      key: "id", label: "Actions", noWrap: true, align: "right",
       render: (_, row) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

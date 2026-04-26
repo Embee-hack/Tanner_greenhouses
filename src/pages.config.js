@@ -48,6 +48,7 @@
  * The mainPage value must match a key in the PAGES object exactly.
  */
 import Compare from './pages/Compare';
+import GreenhouseDailyLogs from './pages/GreenhouseDailyLogs';
 import CropCycles from './pages/CropCycles';
 import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
@@ -70,6 +71,7 @@ import __Layout from './Layout.jsx';
 
 export const PAGES = {
     "Compare": Compare,
+    "GreenhouseDailyLogs": GreenhouseDailyLogs,
     "CropCycles": CropCycles,
     "Dashboard": Dashboard,
     "Expenses": Expenses,

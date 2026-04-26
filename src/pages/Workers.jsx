@@ -5,7 +5,7 @@ import { isAdminUser } from "@/lib/roles.js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Phone, Building2, User, Settings2, ImageIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Phone, Building2, User, Settings2, ImageIcon, Leaf } from "lucide-react";
 import Modal from "@/components/shared/Modal";
 import PageHeader from "@/components/shared/PageHeader";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
@@ -14,6 +14,12 @@ import StatusBadge from "@/components/shared/StatusBadge";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import { useCurrency } from "@/components/shared/CurrencyProvider";
 import { getErrorMessage } from "@/lib/errors.js";
+
+const normalizeGreenhouseIds = (worker) => {
+  if (Array.isArray(worker?.greenhouse_ids)) return worker.greenhouse_ids.filter(Boolean);
+  if (worker?.greenhouse_id) return [worker.greenhouse_id];
+  return [];
+};
 
 const DEFAULT_ROLE_OPTIONS = [
   { key: "farm_manager", name: "Farm Manager" },
@@ -26,7 +32,6 @@ const DEFAULT_ROLE_OPTIONS = [
 
 const DEFAULT_ROLE_KEYS = new Set(DEFAULT_ROLE_OPTIONS.map((item) => item.key));
 const STATUSES = ["active", "inactive", "on_leave", "terminated"];
-const NONE_VALUE = "__none__";
 
 const normalizeRoleKey = (value) =>
   String(value || "")
@@ -62,13 +67,17 @@ const getWorkerInitials = (name) =>
 const toWorkerListItem = (worker) => {
   const picture = String(worker?.profile_picture || "").trim();
   const safePicture = picture && (picture.startsWith("/") || /^https?:\/\//i.test(picture)) ? picture : null;
+  const greenhouseIds = normalizeGreenhouseIds(worker);
 
   return {
     id: worker?.id || null,
     full_name: worker?.full_name || "",
     role: worker?.role || "",
     phone: worker?.phone || "",
-    greenhouse_id: worker?.greenhouse_id || null,
+    greenhouse_id: greenhouseIds[0] || null,
+    greenhouse_ids: greenhouseIds,
+    nursery_assigned: worker?.nursery_assigned === true || worker?.nursery_assigned === "true",
+    blocks: worker?.blocks || null,
     hire_date: worker?.hire_date || null,
     status: worker?.status || "active",
     salary: worker?.salary ?? null,
@@ -185,7 +194,9 @@ export default function Workers() {
     setForm({
       status: "active",
       role: defaultRoleKey,
-      greenhouse_id: NONE_VALUE,
+      greenhouse_ids: [],
+      nursery_assigned: false,
+      blocks: "",
       salary: "",
       profile_picture: null,
     });
@@ -201,7 +212,9 @@ export default function Workers() {
     setError("");
     setForm({
       ...worker,
-      greenhouse_id: worker.greenhouse_id || NONE_VALUE,
+      greenhouse_ids: normalizeGreenhouseIds(worker),
+      nursery_assigned: worker.nursery_assigned === true || worker.nursery_assigned === "true",
+      blocks: worker.blocks || "",
       salary: worker.salary ?? "",
     });
     setShowModal(true);
@@ -210,10 +223,14 @@ export default function Workers() {
   const handleSave = async () => {
     setError("");
     try {
+      const greenhouseIds = Array.isArray(form.greenhouse_ids) ? form.greenhouse_ids.filter(Boolean) : [];
       const payload = {
         ...form,
         role: normalizeRoleKey(form.role) || defaultRoleKey,
-        greenhouse_id: form.greenhouse_id && form.greenhouse_id !== NONE_VALUE ? form.greenhouse_id : null,
+        greenhouse_ids: greenhouseIds,
+        greenhouse_id: greenhouseIds[0] || null,
+        nursery_assigned: !!form.nursery_assigned,
+        blocks: String(form.blocks || "").trim() || null,
         salary: form.salary === "" || form.salary == null ? null : Number(form.salary),
       };
 
@@ -381,7 +398,17 @@ export default function Workers() {
     }
   };
 
-  const ghName = (id) => greenhouses.find((greenhouse) => greenhouse.id === id)?.code || "—";
+  const ghName = (id) => greenhouses.find((g) => g.id === id)?.code || null;
+
+  const assignmentLabel = (worker) => {
+    const parts = [];
+    const ids = normalizeGreenhouseIds(worker);
+    const ghCodes = ids.map(ghName).filter(Boolean);
+    if (ghCodes.length > 0) parts.push(ghCodes.join(", "));
+    if (worker.nursery_assigned) parts.push("Nursery");
+    return parts.length > 0 ? parts.join(" · ") : "Not assigned";
+  };
+
   const totalSalary = workers.filter((worker) => worker.status === "active").reduce((sum, worker) => sum + (worker.salary || 0), 0);
 
   return (
@@ -456,11 +483,14 @@ export default function Workers() {
 
                     <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
                       <div className="rounded-xl bg-muted/50 px-3 py-3">
-                        <div className="text-xs text-muted-foreground">Assigned House</div>
+                        <div className="text-xs text-muted-foreground">Assignments</div>
                         <div className="mt-1 flex items-center gap-1.5 text-sm font-medium text-foreground">
-                          <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span>{worker.greenhouse_id ? ghName(worker.greenhouse_id) : "Not assigned"}</span>
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{assignmentLabel(worker)}</span>
                         </div>
+                        {worker.blocks && (
+                          <div className="mt-0.5 text-xs text-muted-foreground truncate">Blocks: {worker.blocks}</div>
+                        )}
                       </div>
 
                       <div className="rounded-xl bg-muted/50 px-3 py-3">
@@ -563,21 +593,60 @@ export default function Workers() {
             <Input placeholder="+234..." value={form.phone || ""} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} />
           </FormField>
 
-          <FormField label="Assigned Greenhouse">
-            <Select value={form.greenhouse_id || NONE_VALUE} onValueChange={(value) => setForm((prev) => ({ ...prev, greenhouse_id: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select greenhouse (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_VALUE}>None</SelectItem>
-                {greenhouses.map((greenhouse) => (
-                  <SelectItem key={greenhouse.id} value={greenhouse.id}>
-                    {greenhouse.code} - {greenhouse.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div className="text-sm font-semibold text-foreground">Assignments <span className="text-xs font-normal text-muted-foreground">(optional)</span></div>
+
+            {greenhouses.length > 0 && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-2">Greenhouses</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {greenhouses.map((gh) => {
+                    const checked = (form.greenhouse_ids || []).includes(gh.id);
+                    return (
+                      <label key={gh.id} className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => setForm((prev) => {
+                            const ids = prev.greenhouse_ids || [];
+                            return {
+                              ...prev,
+                              greenhouse_ids: e.target.checked ? [...ids, gh.id] : ids.filter((id) => id !== gh.id),
+                            };
+                          })}
+                          className="rounded"
+                        />
+                        <span className="text-sm font-medium">{gh.code}</span>
+                        {gh.name && <span className="text-xs text-muted-foreground truncate">{gh.name}</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <div className="text-xs text-muted-foreground mb-2">Nursery</div>
+              <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted/50 transition-colors w-fit">
+                <input
+                  type="checkbox"
+                  checked={!!form.nursery_assigned}
+                  onChange={(e) => setForm((prev) => ({ ...prev, nursery_assigned: e.target.checked }))}
+                  className="rounded"
+                />
+                <span className="text-sm font-medium">Assigned to Nursery</span>
+              </label>
+            </div>
+
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Blocks <span className="text-muted-foreground/60">(optional)</span></div>
+              <Input
+                placeholder="e.g. Block A, Block B"
+                value={form.blocks || ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, blocks: e.target.value }))}
+              />
+            </div>
+          </div>
 
           {isAdmin && (
             <FormField label="Monthly Salary (NGN)">
@@ -654,9 +723,19 @@ export default function Workers() {
                   </div>
                   <div className="mt-1 text-sm font-medium text-muted-foreground">{roleLabel(detailWorker.role)}</div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="rounded-full border border-border bg-card px-2.5 py-1">
-                      {detailWorker.greenhouse_id ? `Assigned to ${ghName(detailWorker.greenhouse_id)}` : "No greenhouse assigned"}
-                    </span>
+                    {normalizeGreenhouseIds(detailWorker).map((id) => (
+                      <span key={id} className="rounded-full border border-border bg-card px-2.5 py-1">
+                        <Building2 className="w-3 h-3 inline mr-1" />{ghName(id) || id}
+                      </span>
+                    ))}
+                    {detailWorker.nursery_assigned && (
+                      <span className="rounded-full border border-border bg-card px-2.5 py-1">
+                        <Leaf className="w-3 h-3 inline mr-1" />Nursery
+                      </span>
+                    )}
+                    {!normalizeGreenhouseIds(detailWorker).length && !detailWorker.nursery_assigned && (
+                      <span className="rounded-full border border-border bg-card px-2.5 py-1">No assignments</span>
+                    )}
                     <span className="rounded-full border border-border bg-card px-2.5 py-1">
                       {detailWorker.phone || "No phone number"}
                     </span>
@@ -677,8 +756,17 @@ export default function Workers() {
               </div>
 
               <div className="rounded-xl border border-border p-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned Greenhouse</div>
-                <div className="mt-1 text-sm font-medium text-foreground">{detailWorker.greenhouse_id ? ghName(detailWorker.greenhouse_id) : "Not assigned"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned Houses</div>
+                <div className="mt-1 text-sm font-medium text-foreground">
+                  {normalizeGreenhouseIds(detailWorker).map((id) => ghName(id) || id).join(", ") || "—"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nursery / Blocks</div>
+                <div className="mt-1 text-sm font-medium text-foreground">
+                  {[detailWorker.nursery_assigned ? "Nursery" : null, detailWorker.blocks || null].filter(Boolean).join(" · ") || "—"}
+                </div>
               </div>
 
               <div className="rounded-xl border border-border p-4">

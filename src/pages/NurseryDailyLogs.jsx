@@ -12,17 +12,13 @@ import StatCard from "@/components/dashboard/StatCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Activity, CalendarDays, Droplets, Pencil, Plus, Sprout, Trash2 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
-const ALL_HOUSES_VALUE = "__all_houses__";
-
 const getToday = () => new Date().toISOString().slice(0, 10);
 
 const createDefaultForm = () => ({
-  greenhouse_id: "",
   log_date: getToday(),
   pesticide_applied: "",
   fungicide_applied: "",
@@ -78,7 +74,6 @@ export default function NurseryDailyLogs() {
   const location = useLocation();
   const navigate = useNavigate();
   const [records, setRecords] = useState([]);
-  const [greenhouses, setGreenhouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -88,19 +83,14 @@ export default function NurseryDailyLogs() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
-  const [greenhouseFilter, setGreenhouseFilter] = useState(ALL_HOUSES_VALUE);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   const load = async () => {
     try {
       setLoading(true);
-      const [logRows, greenhouseRows] = await Promise.all([
-        base44.entities.NurseryDailyLog.list("-log_date", 1000),
-        base44.entities.Greenhouse.list("code"),
-      ]);
+      const logRows = await base44.entities.NurseryDailyLog.list("-log_date", 1000);
       setRecords(logRows);
-      setGreenhouses(greenhouseRows);
       setLoadError("");
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load nursery daily logs."));
@@ -108,6 +98,7 @@ export default function NurseryDailyLogs() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     load();
@@ -122,7 +113,6 @@ export default function NurseryDailyLogs() {
 
     setEditItem(logRecord);
     setForm({
-      greenhouse_id: logRecord.greenhouse_id || "",
       log_date: logRecord.log_date || getToday(),
       pesticide_applied: logRecord.pesticide_applied || "",
       fungicide_applied: logRecord.fungicide_applied || "",
@@ -140,26 +130,16 @@ export default function NurseryDailyLogs() {
     navigate(createPageUrl("NurseryDailyLogs"), { replace: true });
   }, [location.search, navigate, records, showModal]);
 
-  const greenhouseMap = Object.fromEntries(greenhouses.map((greenhouse) => [greenhouse.id, greenhouse]));
-
   const filteredRecords = records.filter((record) => {
-    if (greenhouseFilter !== ALL_HOUSES_VALUE && record.greenhouse_id !== greenhouseFilter) return false;
     if (fromDate && String(record.log_date || "") < fromDate) return false;
     if (toDate && String(record.log_date || "") > toDate) return false;
     return true;
   });
 
   const today = getToday();
-  const todayRecords = records.filter((record) => record.log_date === today);
-  const housesLoggedToday = new Set(todayRecords.map((record) => record.greenhouse_id).filter(Boolean)).size;
-  const todayFertigationIntervals = todayRecords.reduce(
-    (sum, record) => sum + Number(record.fertigation_intervals || 0),
-    0
-  );
-  const todayIrrigationIntervals = todayRecords.reduce(
-    (sum, record) => sum + Number(record.irrigation_intervals || 0),
-    0
-  );
+  const todayRecord = records.find((record) => record.log_date === today);
+  const todayFertigationIntervals = Number(todayRecord?.fertigation_intervals || 0);
+  const todayIrrigationIntervals = Number(todayRecord?.irrigation_intervals || 0);
 
   const openCreateModal = () => {
     setEditItem(null);
@@ -171,7 +151,6 @@ export default function NurseryDailyLogs() {
   const openEditModal = (record) => {
     setEditItem(record);
     setForm({
-      greenhouse_id: record.greenhouse_id || "",
       log_date: record.log_date || getToday(),
       pesticide_applied: record.pesticide_applied || "",
       fungicide_applied: record.fungicide_applied || "",
@@ -196,7 +175,6 @@ export default function NurseryDailyLogs() {
   };
 
   const buildPayload = () => {
-    const greenhouse = greenhouseMap[form.greenhouse_id];
     const fertigationIntervals = toNonNegativeInteger(form.fertigation_intervals);
     const fertigationMinutes = toNonNegativeInteger(form.fertigation_minutes_per_interval);
     const irrigationIntervals = toNonNegativeInteger(form.irrigation_intervals);
@@ -206,21 +184,11 @@ export default function NurseryDailyLogs() {
     const nutrientsApplied = String(form.nutrients_applied || "").trim();
     const activities = String(form.activities || "").trim();
 
-    if (!form.greenhouse_id) {
-      return { error: "Select the house for this daily nursery log." };
-    }
     if (!form.log_date) {
       return { error: "Select the log date." };
     }
-    if (
-      records.some(
-        (record) =>
-          record.id !== editItem?.id &&
-          record.greenhouse_id === form.greenhouse_id &&
-          record.log_date === form.log_date
-      )
-    ) {
-      return { error: "This house already has a nursery daily log for the selected date." };
+    if (records.some((record) => record.id !== editItem?.id && record.log_date === form.log_date)) {
+      return { error: "A nursery daily log already exists for this date." };
     }
     if ([fertigationIntervals, fertigationMinutes, irrigationIntervals, irrigationMinutes].some(Number.isNaN)) {
       return { error: "Intervals and minutes must be whole numbers of zero or more." };
@@ -240,9 +208,6 @@ export default function NurseryDailyLogs() {
 
     return {
       payload: {
-        greenhouse_id: form.greenhouse_id,
-        greenhouse_code: greenhouse?.code || "",
-        greenhouse_name: greenhouse?.name || greenhouse?.code || "",
         log_date: form.log_date,
         pesticide_applied: pesticideApplied || null,
         fungicide_applied: fungicideApplied || null,
@@ -296,12 +261,7 @@ export default function NurseryDailyLogs() {
   };
 
   const columns = [
-    { key: "log_date", label: "Date" },
-    {
-      key: "greenhouse_id",
-      label: "House",
-      render: (value, row) => greenhouseMap[value]?.code || row.greenhouse_code || "—",
-    },
+    { key: "log_date", label: "Date", noWrap: true },
     {
       key: "applications",
       label: "Applications",
@@ -319,7 +279,7 @@ export default function NurseryDailyLogs() {
     },
     {
       key: "actions",
-      label: "",
+      label: "", noWrap: true, align: "right",
       render: (_value, row) => (
         <div className="flex justify-end gap-1">
           <Button
@@ -349,25 +309,12 @@ export default function NurseryDailyLogs() {
     },
   ];
 
-  if (!loading && greenhouses.length === 0 && records.length === 0) {
-    return (
-      <div className="p-4 md:p-6">
-        <PageHeader title="Nursery Daily Logs" subtitle="Track daily nursery operations for each house." />
-        <EmptyState
-          icon={CalendarDays}
-          title="Add a greenhouse first"
-          description="Daily nursery logs are recorded against a destination house."
-          action={<Button onClick={() => navigate(createPageUrl("Greenhouses"))}>Open Greenhouses</Button>}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 md:p-6 space-y-6">
       <PageHeader
         title="Nursery Daily Logs"
-        subtitle={`${records.length} log${records.length === 1 ? "" : "s"} captured for nursery operations by house`}
+        subtitle={`${records.length} log${records.length === 1 ? "" : "s"} captured for nursery operations`}
         actions={
           <Button size="sm" onClick={openCreateModal} className="gap-1.5">
             <Plus className="w-4 h-4" />
@@ -388,9 +335,9 @@ export default function NurseryDailyLogs() {
           loading={loading}
         />
         <StatCard
-          title="Today's Logs"
-          value={todayRecords.length.toLocaleString()}
-          subtitle={`${housesLoggedToday.toLocaleString()} house${housesLoggedToday === 1 ? "" : "s"} covered`}
+          title="Today's Log"
+          value={todayRecord ? "Recorded" : "Not yet"}
+          subtitle={todayRecord ? `Logged on ${today}` : "No entry for today"}
           icon={CalendarDays}
           color="success"
           loading={loading}
@@ -414,23 +361,7 @@ export default function NurseryDailyLogs() {
       </div>
 
       <div className="bg-card rounded-xl border border-border p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <FormField label="Filter by House">
-            <Select value={greenhouseFilter} onValueChange={setGreenhouseFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All houses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_HOUSES_VALUE}>All houses</SelectItem>
-                {greenhouses.map((greenhouse) => (
-                  <SelectItem key={greenhouse.id} value={greenhouse.id}>
-                    {greenhouse.code} {greenhouse.name ? `· ${greenhouse.name}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormField>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <FormField label="From Date">
             <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
           </FormField>
@@ -459,33 +390,13 @@ export default function NurseryDailyLogs() {
         size="lg"
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="House" required>
-              <Select
-                value={form.greenhouse_id}
-                onValueChange={(value) => setForm((prev) => ({ ...prev, greenhouse_id: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select house" />
-                </SelectTrigger>
-                <SelectContent>
-                  {greenhouses.map((greenhouse) => (
-                    <SelectItem key={greenhouse.id} value={greenhouse.id}>
-                      {greenhouse.code} {greenhouse.name ? `· ${greenhouse.name}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            <FormField label="Log Date" required>
-              <Input
-                type="date"
-                value={form.log_date}
-                onChange={(event) => setForm((prev) => ({ ...prev, log_date: event.target.value }))}
-              />
-            </FormField>
-          </div>
+          <FormField label="Log Date" required>
+            <Input
+              type="date"
+              value={form.log_date}
+              onChange={(event) => setForm((prev) => ({ ...prev, log_date: event.target.value }))}
+            />
+          </FormField>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField label="Pesticide Applied">

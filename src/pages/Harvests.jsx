@@ -164,16 +164,16 @@ export default function Harvests() {
   const chartData = Object.entries(weeklyMap).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([month, kg]) => ({ month, kg: parseFloat(kg.toFixed(1)) }));
 
   const columns = [
-    { key: "date", label: "Date" },
-    { key: "greenhouse_id", label: "Greenhouse", render: v => ghMap[v]?.code ?? "—" },
-    { key: "kg_harvested", label: "Total (kg)", align: "right", render: v => v?.toFixed(1) },
-    { key: "grade_a_kg", label: "Grade A", align: "right", render: v => v > 0 ? v.toFixed(1) : "—" },
-    { key: "grade_b_kg", label: "Grade B", align: "right", render: v => v > 0 ? v.toFixed(1) : "—" },
-    { key: "grade_c_kg", label: "Grade C", align: "right", render: v => v > 0 ? v.toFixed(1) : "—" },
+    { key: "date", label: "Date", noWrap: true },
+    { key: "greenhouse_id", label: "House", noWrap: true, render: v => ghMap[v]?.code ?? "—" },
+    { key: "kg_harvested", label: "Total (kg)", align: "right", noWrap: true, render: v => v?.toFixed(1) },
+    { key: "grade_a_kg", label: "Grade A (kg)", align: "right", noWrap: true, render: v => v > 0 ? v.toFixed(1) : "—" },
+    { key: "grade_b_kg", label: "Grade B (kg)", align: "right", noWrap: true, render: v => v > 0 ? v.toFixed(1) : "—" },
+    { key: "grade_c_kg", label: "Grade C (kg)", align: "right", noWrap: true, render: v => v > 0 ? v.toFixed(1) : "—" },
     { key: "notes", label: "Notes", render: v => v || "—" },
     {
       key: "id",
-      label: "Actions",
+      label: "Actions", noWrap: true, align: "right",
       render: (_, row) => (
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => openEditModal(row)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">

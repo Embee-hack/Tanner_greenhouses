@@ -283,14 +283,24 @@ const isListSafeImageUrl = (value) => {
   return Boolean(text) && (text.startsWith("/") || /^https?:\/\//i.test(text));
 };
 
+const normalizeWorkerGreenhouseIds = (worker) => {
+  if (Array.isArray(worker?.greenhouse_ids)) return worker.greenhouse_ids.filter(Boolean);
+  if (worker?.greenhouse_id) return [worker.greenhouse_id];
+  return [];
+};
+
 const summarizeWorker = (user, worker) => {
   const picture = String(worker?.profile_picture || "").trim();
+  const greenhouseIds = normalizeWorkerGreenhouseIds(worker);
   return sanitizeEntityDataForUser(user, "Worker", {
     id: worker?.id || null,
     full_name: worker?.full_name || "",
     role: worker?.role || "",
     phone: worker?.phone || "",
-    greenhouse_id: worker?.greenhouse_id || null,
+    greenhouse_id: greenhouseIds[0] || null,
+    greenhouse_ids: greenhouseIds,
+    nursery_assigned: worker?.nursery_assigned === true || worker?.nursery_assigned === "true",
+    blocks: worker?.blocks || null,
     hire_date: worker?.hire_date || null,
     status: worker?.status || "active",
     salary: worker?.salary ?? null,
@@ -336,6 +346,9 @@ const queryWorkerSummaries = async () =>
       data ->> 'role' AS role,
       data ->> 'phone' AS phone,
       NULLIF(data ->> 'greenhouse_id', '') AS greenhouse_id,
+      NULLIF(data ->> 'greenhouse_ids', '') AS greenhouse_ids_raw,
+      NULLIF(data ->> 'nursery_assigned', '') AS nursery_assigned,
+      NULLIF(data ->> 'blocks', '') AS blocks,
       NULLIF(data ->> 'hire_date', '') AS hire_date,
       COALESCE(NULLIF(data ->> 'status', ''), 'active') AS status,
       NULLIF(data ->> 'profile_picture', '') AS profile_picture,
@@ -345,6 +358,18 @@ const queryWorkerSummaries = async () =>
     ORDER BY LOWER(COALESCE(data ->> 'full_name', '')) ASC, updated_at DESC
   `;
 
+const parseGreenhouseIds = (row) => {
+  try {
+    const raw = row?.greenhouse_ids_raw;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    }
+  } catch (_e) { /* ignore */ }
+  if (row?.greenhouse_id) return [row.greenhouse_id];
+  return [];
+};
+
 const loadWorkerSummaries = async (user) => {
   try {
     const rows = await queryWorkerSummaries();
@@ -352,6 +377,7 @@ const loadWorkerSummaries = async (user) => {
       const salary = worker?.salary == null || worker.salary === "" ? null : Number(worker.salary);
       return summarizeWorker(user, {
         ...worker,
+        greenhouse_ids: parseGreenhouseIds(worker),
         salary: Number.isFinite(salary) ? salary : null,
         created_date: worker?.created_at?.toISOString?.() || null,
         updated_date: worker?.updated_at?.toISOString?.() || null,

@@ -469,12 +469,12 @@ const buildResponsePayload = ({ greenhouseId, incidentId, outcome = form.outcome
   };
 
   const columns = [
-    { key: "date", label: "Date" },
-    { key: "greenhouse_id", label: "Greenhouse", render: (value) => ghMap[value]?.code ?? "—" },
-    { key: "treatment_type", label: "Response Type", render: (value) => getResponseTypeLabel(value) },
+    { key: "date", label: "Date", noWrap: true },
+    { key: "greenhouse_id", label: "House", noWrap: true, render: (value) => ghMap[value]?.code ?? "—" },
+    { key: "treatment_type", label: "Response Type", noWrap: true, render: (value) => getResponseTypeLabel(value) },
     {
       key: "chemical_name",
-      label: "Action",
+      label: "Treatment / Chemical",
       render: (_, row) => {
         const sharedCount = row.shared_response_id
           ? records.filter((record) => record.shared_response_id === row.shared_response_id).length
@@ -494,11 +494,11 @@ const buildResponsePayload = ({ greenhouseId, incidentId, outcome = form.outcome
         );
       },
     },
-    { key: "applicator", label: "Handled By", render: (value) => value || "—" },
-    { key: "outcome", label: "Result", render: (value) => <StatusBadge status={value} /> },
+    { key: "applicator", label: "Handled By", noWrap: true, render: (value) => value || "—" },
+    { key: "outcome", label: "Outcome", noWrap: true, render: (value) => <StatusBadge status={value} /> },
     {
       key: "id",
-      label: "Actions",
+      label: "Actions", noWrap: true, align: "right",
       render: (_, row) => {
         const sharedCount = row.shared_response_id
           ? records.filter((record) => record.shared_response_id === row.shared_response_id).length

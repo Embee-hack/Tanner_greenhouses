@@ -40,6 +40,7 @@ const groupedNav = [
     defaultOpen: false,
     items: [
       { label: "Greenhouses", icon: Sprout, page: "Greenhouses" },
+      { label: "Daily Logs", icon: CalendarDays, page: "GreenhouseDailyLogs" },
       { label: "Crop Cycles", icon: Leaf, page: "CropCycles" },
       { label: "Harvests", icon: BarChart3, page: "Harvests" },
       { label: "Inventory", icon: Package, page: "Inventory" },
@@ -107,12 +108,6 @@ const groupedNav = [
     ],
   },
 ];
-
-const pageLabelMap = groupedNav
-  .flatMap((section) => section.items)
-  .reduce((acc, item) => ({ ...acc, [item.page]: item.label }), {
-    [dashboardItem.page]: dashboardItem.label,
-  });
 
 const defaultFooterStats = {
   greenhouseCount: 0,
@@ -212,8 +207,6 @@ function LayoutInner({ children, currentPageName }) {
   const visibleGroups = groupedNav
     .map((section) => ({ ...section, items: section.items.filter(shouldShowItem) }))
     .filter((section) => section.items.length > 0);
-
-  const pageTitle = pageLabelMap[currentPageName] || currentPageName;
 
   const toggleSection = (sectionKey) => {
     setOpenSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
@@ -325,15 +318,18 @@ function LayoutInner({ children, currentPageName }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="flex items-center gap-4 px-4 md:px-6 py-4 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-20">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground">
+        <header className="flex items-center gap-3 px-4 md:px-6 py-3 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-20">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground p-1">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-base font-semibold text-foreground">
-              {pageTitle}
-              {!isOwner && <span className="ml-2 text-xs font-normal text-muted-foreground">(Farm Manager)</span>}
-            </h1>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center flex-shrink-0">
+              <Sprout className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <span className="font-bold text-sm text-foreground leading-tight">Greenhouse</span>
+            {!isOwner && (
+              <span className="hidden sm:inline text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Farm Manager</span>
+            )}
           </div>
           <HeaderControls showNotifications={isOwner} />
         </header>

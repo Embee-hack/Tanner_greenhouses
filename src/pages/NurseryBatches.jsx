@@ -267,29 +267,34 @@ export default function NurseryBatches() {
     {
       key: "greenhouse_id",
       label: "House",
+      noWrap: true,
       render: (value, row) => greenhouseMap[value]?.code || row.greenhouse_code || "—",
     },
     {
       key: "seeds_planted",
       label: "Seeds Planted",
+      noWrap: true,
       render: (value) => Number(value || 0).toLocaleString(),
       align: "right",
     },
     {
       key: "trays_used",
       label: "Trays Used",
+      noWrap: true,
       render: (value) => Number(value || 0).toLocaleString(),
       align: "right",
     },
-    { key: "date_planted", label: "Date Planted" },
+    { key: "date_planted", label: "Date Planted", noWrap: true },
     {
       key: "date_transplanted",
       label: "Date Transplanted",
+      noWrap: true,
       render: (value) => value || "—",
     },
     {
       key: "status",
       label: "Status",
+      noWrap: true,
       render: (value) => <StatusBadge status={value || "active"} />,
     },
     {

@@ -424,23 +424,23 @@ export default function WorkerAttendance() {
   };
 
   const columns = [
-    { key: "date", label: "Date" },
+    { key: "date", label: "Date", noWrap: true },
     {
       key: "worker_id",
-      label: "Worker",
+      label: "Worker", noWrap: true,
       render: (_, row) => workerMap[row.worker_id]?.full_name || row.worker_name || "—",
     },
     {
       key: "greenhouse_id",
-      label: "House",
+      label: "House", noWrap: true,
       render: (_, row) => greenhouseMap[row.greenhouse_id]?.code || row.greenhouse_code || "—",
     },
-    { key: "status", label: "Status", render: (value) => <StatusBadge status={value} /> },
-    { key: "check_in_time", label: "Check In", render: (value) => value || "—" },
-    { key: "check_out_time", label: "Check Out", render: (value) => value || "—" },
+    { key: "status", label: "Status", noWrap: true, render: (value) => <StatusBadge status={value} /> },
+    { key: "check_in_time", label: "Check In", noWrap: true, render: (value) => value || "—" },
+    { key: "check_out_time", label: "Check Out", noWrap: true, render: (value) => value || "—" },
     {
       key: "issues",
-      label: "Issues",
+      label: "Issues", noWrap: true,
       render: (_, row) => {
         const summary = issueSummaryByDay[issueKey(row.worker_id, row.date)];
         if (!summary) return "—";
@@ -450,7 +450,7 @@ export default function WorkerAttendance() {
     { key: "notes", label: "Notes", render: (value) => value || "—" },
     {
       key: "id",
-      label: "Actions",
+      label: "Actions", noWrap: true, align: "right",
       render: (_, row) => (
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => openEditModal(row)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">

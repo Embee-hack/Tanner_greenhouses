@@ -49,7 +49,7 @@ export default function DataTable({ columns, data, loading, onRowClick }) {
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={cn("px-4 py-3 text-foreground whitespace-nowrap", col.align === "right" && "text-right")}
+                    className={cn("px-4 py-3 text-foreground", col.align === "right" && "text-right", col.noWrap && "whitespace-nowrap")}
                   >
                     {col.render ? col.render(row[col.key], row) : row[col.key] ?? "—"}
                   </td>
