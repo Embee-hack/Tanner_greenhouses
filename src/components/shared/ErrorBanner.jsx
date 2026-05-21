@@ -9,7 +9,7 @@ export default function ErrorBanner({ message, onRetry, className }) {
     <div className={cn("rounded-xl border border-danger/20 bg-danger/10 px-4 py-3", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-white/70 p-1.5 text-danger">
+          <div className="mt-0.5 rounded-lg bg-danger/14 p-1.5 text-danger">
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div>

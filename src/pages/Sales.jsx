@@ -824,7 +824,7 @@ export default function Sales() {
                               </div>
                             </td>
                             <td className="px-4 py-3">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-success/14 text-success border border-success/30 whitespace-nowrap">
                                 {getItemLabel(row)}
                               </span>
                             </td>

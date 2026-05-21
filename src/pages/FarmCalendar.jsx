@@ -6,6 +6,7 @@ import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,8 +24,8 @@ const EVENT_COLORS = {
   planting: "bg-success/20 text-success border-success/40",
   harvest: "bg-primary/20 text-primary border-primary/40",
   treatment: "bg-warning/20 text-warning border-warning/40",
-  inspection: "bg-blue-500/20 text-blue-600 border-blue-400/40",
-  maintenance: "bg-purple-500/20 text-purple-600 border-purple-400/40",
+  inspection: "bg-sky-400/20 text-sky-200 border-sky-300/40",
+  maintenance: "bg-purple-400/20 text-purple-200 border-purple-300/40",
   other: "bg-muted text-muted-foreground border-border",
 };
 const DOT_COLORS = {
@@ -293,9 +294,12 @@ export default function FarmCalendar() {
                       <div className="capitalize opacity-80">{ev.event_type}{ev.greenhouse_id && ` · ${ghMap[ev.greenhouse_id]?.code}`}</div>
                       <div className="mt-1 opacity-70">{formatEventRange(ev)}</div>
                       {ev.description && <div className="mt-1 opacity-70">{ev.description}</div>}
-                      <div className="flex gap-2 mt-2">
-                        <button onClick={() => openEdit(ev)} className="underline">Edit</button>
-                        <button onClick={() => setDeleteItem(ev)} className="underline">Delete</button>
+                      <div className="mt-2 flex justify-end">
+                        <RecordActions
+                          onEdit={() => openEdit(ev)}
+                          onDelete={() => setDeleteItem(ev)}
+                          ariaLabel={`Actions for ${ev.title}`}
+                        />
                       </div>
                     </div>
                   ))}

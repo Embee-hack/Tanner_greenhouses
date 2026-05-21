@@ -8,10 +8,11 @@ import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Package, AlertTriangle, TrendingDown, ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { Plus, Package, AlertTriangle, TrendingDown, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
@@ -75,7 +76,7 @@ function StockAdjustModal({ item, onClose, onDone }) {
           {["add", "remove"].map(m => (
             <button key={m} onClick={() => setMode(m)}
               className={cn("flex-1 py-2.5 text-sm font-semibold capitalize transition-colors",
-                mode === m ? (m === "add" ? "bg-emerald-600 text-white" : "bg-red-500 text-white") : "bg-muted text-muted-foreground hover:bg-muted/80"
+                mode === m ? (m === "add" ? "bg-success text-success-foreground" : "bg-danger text-danger-foreground") : "bg-muted text-muted-foreground hover:bg-muted/80"
               )}
             >{m === "add" ? "➕ Add Stock" : "➖ Remove Stock"}</button>
           ))}
@@ -333,13 +334,12 @@ export default function Inventory() {
                     ± Adjust Stock
                   </button>
 
-                  <div className="flex gap-1 mt-1.5">
-                    <button onClick={() => openEdit(item)} className="flex-1 py-1 text-xs border border-border rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-1">
-                      <Pencil className="w-3 h-3" /> Edit
-                    </button>
-                    <button onClick={() => setDeleteItem(item)} className="p-1 text-xs border border-border rounded-lg hover:bg-red-50 hover:border-red-200 transition-colors text-danger">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  <div className="mt-1.5 flex justify-end">
+                    <RecordActions
+                      onEdit={() => openEdit(item)}
+                      onDelete={() => setDeleteItem(item)}
+                      ariaLabel={`Actions for ${item.name}`}
+                    />
                   </div>
                 </div>
               </div>

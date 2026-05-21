@@ -181,7 +181,7 @@ export default function Compare() {
                       </td>
                       <td className="px-5 py-3 text-right">
                         {m.profit !== 0 || m.revenue > 0 ? (
-                          <span className={cn("px-2.5 py-1 rounded-lg text-xs font-bold", m.profit > 0 ? "bg-emerald-50 text-emerald-700" : m.profit < 0 ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700")}>
+                          <span className={cn("px-2.5 py-1 rounded-lg text-xs font-bold", m.profit > 0 ? "bg-success/14 text-success" : m.profit < 0 ? "bg-danger/14 text-danger" : "bg-warning/14 text-warning")}>
                             {fmt(m.profit)}
                           </span>
                         ) : "—"}

@@ -9,6 +9,7 @@ import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import StatCard from "@/components/dashboard/StatCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,6 @@ import {
   CheckCircle2,
   CircleDashed,
   Plus,
-  Pencil,
-  Trash2,
   Wallet,
 } from "lucide-react";
 
@@ -285,14 +284,11 @@ export default function WorkerGrievances() {
       key: "id",
       label: "Actions",
       render: (_, row) => (
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => openEditModal(row)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
-            <Pencil className="w-3 h-3" /> Edit
-          </button>
-          <button onClick={() => setDeleteItem(row)} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
-            <Trash2 className="w-3 h-3" /> Delete
-          </button>
-        </div>
+        <RecordActions
+          onEdit={() => openEditModal(row)}
+          onDelete={() => setDeleteItem(row)}
+          ariaLabel={`Actions for grievance on ${row.date}`}
+        />
       ),
     },
   ];

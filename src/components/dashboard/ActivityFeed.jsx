@@ -23,38 +23,38 @@ import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { createPageUrl } from "@/utils";
 
 const ENTITY_CONFIG = {
-  HarvestRecord: { icon: BarChart2, color: "bg-green-100 text-green-700", label: "Harvest" },
-  Incident: { icon: AlertTriangle, color: "bg-red-100 text-red-700", label: "Incident" },
-  ExpenseRecord: { icon: DollarSign, color: "bg-blue-100 text-blue-700", label: "Expense" },
-  Treatment: { icon: FlaskConical, color: "bg-yellow-100 text-yellow-700", label: "Response" },
-  NurseryBatch: { icon: Sprout, color: "bg-emerald-100 text-emerald-700", label: "Nursery Batch" },
-  NurseryDailyLog: { icon: CalendarDays, color: "bg-teal-100 text-teal-700", label: "Nursery Log" },
-  WorkerAttendance: { icon: CalendarDays, color: "bg-cyan-100 text-cyan-700", label: "Attendance" },
-  WorkerGrievance: { icon: AlertTriangle, color: "bg-orange-100 text-orange-700", label: "Grievance" },
-  SalesRecord: { icon: ShoppingCart, color: "bg-emerald-100 text-emerald-700", label: "Sale" },
-  CropCycle: { icon: Leaf, color: "bg-lime-100 text-lime-700", label: "Crop Cycle" },
-  PlantPopulationLog: { icon: Sprout, color: "bg-teal-100 text-teal-700", label: "Population" },
-  InventoryItem: { icon: Package, color: "bg-purple-100 text-purple-700", label: "Inventory" },
-  CalendarEvent: { icon: CalendarDays, color: "bg-indigo-100 text-indigo-700", label: "Calendar" },
-  User: { icon: User, color: "bg-cyan-100 text-cyan-700", label: "User" },
-  Auth: { icon: ShieldCheck, color: "bg-slate-100 text-slate-700", label: "Auth" },
-  File: { icon: Upload, color: "bg-amber-100 text-amber-700", label: "Upload" },
-  EventReminder: { icon: Settings2, color: "bg-violet-100 text-violet-700", label: "Reminder" },
-  UserProfile: { icon: User, color: "bg-cyan-100 text-cyan-700", label: "Profile" },
+  HarvestRecord: { icon: BarChart2, color: "bg-success/14 text-success", label: "Harvest" },
+  Incident: { icon: AlertTriangle, color: "bg-danger/14 text-danger", label: "Incident" },
+  ExpenseRecord: { icon: DollarSign, color: "bg-sky-400/14 text-sky-200", label: "Expense" },
+  Treatment: { icon: FlaskConical, color: "bg-warning/14 text-warning", label: "Response" },
+  NurseryBatch: { icon: Sprout, color: "bg-success/14 text-success", label: "Nursery Batch" },
+  NurseryDailyLog: { icon: CalendarDays, color: "bg-teal-400/14 text-teal-200", label: "Nursery Log" },
+  WorkerAttendance: { icon: CalendarDays, color: "bg-cyan-400/14 text-cyan-200", label: "Attendance" },
+  WorkerGrievance: { icon: AlertTriangle, color: "bg-orange-400/14 text-orange-200", label: "Grievance" },
+  SalesRecord: { icon: ShoppingCart, color: "bg-success/14 text-success", label: "Sale" },
+  CropCycle: { icon: Leaf, color: "bg-lime-400/14 text-lime-200", label: "Crop Cycle" },
+  PlantPopulationLog: { icon: Sprout, color: "bg-teal-400/14 text-teal-200", label: "Population" },
+  InventoryItem: { icon: Package, color: "bg-purple-400/14 text-purple-200", label: "Inventory" },
+  CalendarEvent: { icon: CalendarDays, color: "bg-indigo-400/14 text-indigo-200", label: "Calendar" },
+  User: { icon: User, color: "bg-cyan-400/14 text-cyan-200", label: "User" },
+  Auth: { icon: ShieldCheck, color: "bg-muted/70 text-muted-foreground", label: "Auth" },
+  File: { icon: Upload, color: "bg-warning/14 text-warning", label: "Upload" },
+  EventReminder: { icon: Settings2, color: "bg-violet-400/14 text-violet-200", label: "Reminder" },
+  UserProfile: { icon: User, color: "bg-cyan-400/14 text-cyan-200", label: "Profile" },
 };
 
 const ACTION_BADGE = {
-  create: "bg-green-100 text-green-700 border-green-200",
-  update: "bg-blue-100 text-blue-700 border-blue-200",
-  delete: "bg-red-100 text-red-700 border-red-200",
-  login: "bg-cyan-100 text-cyan-700 border-cyan-200",
-  logout: "bg-slate-100 text-slate-700 border-slate-200",
-  invite: "bg-violet-100 text-violet-700 border-violet-200",
-  setup: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  upload: "bg-amber-100 text-amber-700 border-amber-200",
-  run: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  dry_run: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  test_email: "bg-pink-100 text-pink-700 border-pink-200",
+  create: "bg-success/14 text-success border-success/30",
+  update: "bg-sky-400/14 text-sky-200 border-sky-300/30",
+  delete: "bg-danger/14 text-danger border-danger/30",
+  login: "bg-cyan-400/14 text-cyan-200 border-cyan-300/30",
+  logout: "bg-muted/70 text-muted-foreground border-border",
+  invite: "bg-violet-400/14 text-violet-200 border-violet-300/30",
+  setup: "bg-success/14 text-success border-success/30",
+  upload: "bg-warning/14 text-warning border-warning/30",
+  run: "bg-indigo-400/14 text-indigo-200 border-indigo-300/30",
+  dry_run: "bg-indigo-400/14 text-indigo-200 border-indigo-300/30",
+  test_email: "bg-pink-400/14 text-pink-200 border-pink-300/30",
 };
 
 const formatDayLabel = (isoDate) => {
@@ -227,8 +227,8 @@ export default function ActivityFeed() {
   }, [grouped, hasAutoExpanded]);
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+    <div className="console-glass bg-card/85 rounded-2xl border overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/70">
         <div>
           <h3 className="font-bold text-base text-foreground flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary" />

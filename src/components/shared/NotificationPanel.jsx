@@ -11,25 +11,25 @@ import { createPageUrl } from "@/utils";
 const PRIORITY_STYLES = {
   critical: {
     dot: "bg-red-500",
-    badge: "bg-red-100 text-red-700 border-red-200",
+    badge: "bg-danger/14 text-danger border-danger/30",
     bar: "border-l-red-500",
     label: "CRITICAL",
   },
   high: {
     dot: "bg-orange-500",
-    badge: "bg-orange-100 text-orange-700 border-orange-200",
+    badge: "bg-orange-400/14 text-orange-200 border-orange-300/30",
     bar: "border-l-orange-400",
     label: "HIGH",
   },
   medium: {
     dot: "bg-yellow-500",
-    badge: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    badge: "bg-warning/14 text-warning border-warning/30",
     bar: "border-l-yellow-400",
     label: "MEDIUM",
   },
   info: {
     dot: "bg-blue-400",
-    badge: "bg-blue-50 text-blue-600 border-blue-200",
+    badge: "bg-sky-400/14 text-sky-200 border-sky-300/30",
     bar: "border-l-blue-400",
     label: "INFO",
   },
@@ -77,7 +77,7 @@ export default function NotificationPanel() {
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => { setOpen(o => !o); if (!open) { /* panel opens, don't auto-read */ } }}
-        className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted/70 transition-colors text-muted-foreground hover:text-foreground"
       >
         <Bell className="w-4.5 h-4.5 w-5 h-5" />
         {unread > 0 && (
@@ -88,13 +88,13 @@ export default function NotificationPanel() {
       </button>
 
       {open && (
-        <div className="fixed left-4 right-4 top-16 z-50 sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-[360px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="console-glass fixed left-4 right-4 top-16 z-50 sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-[360px] bg-card/95 border border-border/80 rounded-2xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border/70 bg-muted/30">
             <Bell className="w-4 h-4 text-primary" />
             <span className="font-bold text-sm text-foreground flex-1">Notifications</span>
             {unread > 0 && (
-              <span className="text-xs bg-red-100 text-red-600 font-semibold px-2 py-0.5 rounded-full">{unread} new</span>
+              <span className="text-xs bg-danger/14 text-danger font-semibold px-2 py-0.5 rounded-full">{unread} new</span>
             )}
             <button
               onClick={markAllRead}

@@ -73,27 +73,27 @@ export default function LoginScreen({ onSuccess }) {
   if (loadingBootstrap) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="flex flex-col items-center gap-2 mb-6">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-md">
-          <Sprout className="w-9 h-9 text-white" />
+        <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-[0_0_34px_hsl(var(--primary)/0.28)]">
+          <Sprout className="w-9 h-9 text-primary-foreground" />
         </div>
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Tanner Farms</h1>
-          <p className="text-sm text-slate-500">Farm Management System</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Tanner Farms</h1>
+          <p className="text-sm text-muted-foreground">Farm Management System</p>
         </div>
       </div>
 
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-5">
+      <div className="console-glass w-full max-w-md bg-card/90 border rounded-2xl p-6 space-y-5">
         <div className="text-center">
-          <h2 className="text-lg font-semibold text-slate-900">{hasUsers ? "Sign In" : "Set Up Admin Account"}</h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <h2 className="text-lg font-semibold text-foreground">{hasUsers ? "Sign In" : "Set Up Admin Account"}</h2>
+          <p className="text-sm text-muted-foreground mt-1">
             {hasUsers
               ? "Use your account credentials to access the dashboard."
               : "Create the first admin account for this self-hosted instance."}
@@ -128,7 +128,7 @@ export default function LoginScreen({ onSuccess }) {
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -147,7 +147,7 @@ export default function LoginScreen({ onSuccess }) {
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
                 aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -156,7 +156,7 @@ export default function LoginScreen({ onSuccess }) {
         </div>
 
         {error && (
-          <div className="text-sm rounded-lg px-3 py-2 bg-red-50 text-red-700 border border-red-200">
+          <div className="text-sm rounded-xl px-3 py-2 bg-danger/12 text-danger border border-danger/30">
             {error}
           </div>
         )}
@@ -176,7 +176,7 @@ export default function LoginScreen({ onSuccess }) {
         </Button>
       </div>
 
-      <p className="mt-6 text-xs text-slate-400">Crystal AI Apps</p>
+      <p className="mt-6 text-xs text-muted-foreground">Crystal AI Apps</p>
     </div>
   );
 }

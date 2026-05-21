@@ -57,7 +57,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
@@ -72,7 +72,7 @@ const AuthenticatedApp = () => {
     if (authError.type === "unknown") {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background px-4">
-          <div className="w-full max-w-lg border border-border rounded-xl bg-card p-6 space-y-4">
+          <div className="console-glass w-full max-w-lg border rounded-2xl bg-card/90 p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Unable to load app</h2>
             <p className="text-sm text-muted-foreground">{authError.message || "The frontend cannot reach the API right now."}</p>
             <p className="text-xs text-muted-foreground">

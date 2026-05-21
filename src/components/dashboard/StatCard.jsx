@@ -3,30 +3,30 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 
 export default function StatCard({ title, value, subtitle, trend, trendLabel, icon: Icon, color = "primary", loading }) {
   const colorMap = {
-    primary: "from-primary/10 to-primary/5 border-primary/20 text-primary",
-    success: "from-success/10 to-success/5 border-success/20 text-success",
-    warning: "from-warning/10 to-warning/5 border-warning/20 text-warning",
-    danger: "from-danger/10 to-danger/5 border-danger/20 text-danger",
-    accent: "from-accent/10 to-accent/5 border-accent/20 text-accent",
+    primary: "from-primary/20 to-primary/5 border-primary/25 text-primary",
+    success: "from-success/18 to-success/5 border-success/25 text-success",
+    warning: "from-warning/18 to-warning/5 border-warning/25 text-warning",
+    danger: "from-danger/18 to-danger/5 border-danger/25 text-danger",
+    accent: "from-accent/25 to-accent/5 border-accent/25 text-accent-foreground",
   };
 
   return (
     <div className={cn(
-      "relative bg-card rounded-xl border p-5 overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
+      "console-glass relative bg-card/85 rounded-2xl border p-5 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/35",
       `bg-gradient-to-br ${colorMap[color]}`
     )}>
       <div className="flex items-start justify-between mb-3">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         {Icon && (
-          <div className={cn("p-2 rounded-lg bg-background/60", colorMap[color])}>
+          <div className={cn("p-2 rounded-xl bg-background/35 ring-1 ring-border/65", colorMap[color])}>
             <Icon className="w-4 h-4" />
           </div>
         )}
       </div>
       {loading ? (
         <div className="space-y-2">
-          <div className="h-8 w-24 bg-muted animate-pulse rounded" />
-          <div className="h-3 w-16 bg-muted animate-pulse rounded" />
+          <div className="h-8 w-24 bg-muted/80 animate-pulse rounded-full" />
+          <div className="h-3 w-16 bg-muted/80 animate-pulse rounded-full" />
         </div>
       ) : (
         <>

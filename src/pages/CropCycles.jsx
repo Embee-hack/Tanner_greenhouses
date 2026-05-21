@@ -8,10 +8,11 @@ import Modal from "@/components/shared/Modal";
 import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Leaf, ChevronDown, Calendar, Sprout, TrendingUp, ListTree, Pencil, Trash2 } from "lucide-react";
+import { Plus, Leaf, ChevronDown, Calendar, Sprout, TrendingUp, ListTree } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
@@ -668,14 +669,11 @@ export default function CropCycles() {
                   <div key={cropType.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-sm font-semibold text-foreground">{cropType.name}</div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEditCropType(cropType)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
-                          <Pencil className="w-3 h-3" /> Edit
-                        </button>
-                        <button onClick={() => setDeleteDialog({ kind: "cropType", item: cropType })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
-                      </div>
+                      <RecordActions
+                        onEdit={() => openEditCropType(cropType)}
+                        onDelete={() => setDeleteDialog({ kind: "cropType", item: cropType })}
+                        ariaLabel={`Actions for ${cropType.name}`}
+                      />
                     </div>
                     {cropVarieties.length === 0 ? (
                       <div className="text-xs text-muted-foreground mt-0.5">No varieties yet.</div>
@@ -684,14 +682,11 @@ export default function CropCycles() {
                         {cropVarieties.map((item) => (
                           <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
                             <span className="text-xs text-foreground">{item.name}</span>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => openEditVariety(item)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
-                                <Pencil className="w-3 h-3" /> Edit
-                              </button>
-                              <button onClick={() => setDeleteDialog({ kind: "variety", item })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
-                                <Trash2 className="w-3 h-3" /> Delete
-                              </button>
-                            </div>
+                            <RecordActions
+                              onEdit={() => openEditVariety(item)}
+                              onDelete={() => setDeleteDialog({ kind: "variety", item })}
+                              ariaLabel={`Actions for ${item.name}`}
+                            />
                           </div>
                         ))}
                       </div>

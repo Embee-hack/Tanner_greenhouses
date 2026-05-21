@@ -9,12 +9,13 @@ import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import StatusBadge from "@/components/shared/StatusBadge.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import StatCard from "@/components/dashboard/StatCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Leaf, Package, Pencil, Plus, Sprout, Trash2 } from "lucide-react";
+import { CalendarDays, Leaf, Package, Plus, Sprout } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
@@ -301,30 +302,11 @@ export default function NurseryBatches() {
       key: "actions",
       label: "",
       render: (_value, row) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              openEditModal(row);
-            }}
-            aria-label={`Edit ${getBatchLabel(row)}`}
-          >
-            <Pencil className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDeleteItem(row);
-            }}
-            aria-label={`Delete ${getBatchLabel(row)}`}
-          >
-            <Trash2 className="w-4 h-4 text-danger" />
-          </Button>
-        </div>
+        <RecordActions
+          onEdit={() => openEditModal(row)}
+          onDelete={() => setDeleteItem(row)}
+          ariaLabel={`Actions for ${getBatchLabel(row)}`}
+        />
       ),
     },
   ];

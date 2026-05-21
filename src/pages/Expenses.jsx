@@ -49,15 +49,15 @@ const formatExpenseDate = (dateStr) => {
 };
 
 const CATEGORY_COLORS = {
-  labor: "bg-blue-50 text-blue-700 border-blue-200",
-  fertilizer: "bg-lime-50 text-lime-700 border-lime-200",
-  pesticide: "bg-orange-50 text-orange-700 border-orange-200",
-  water: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  energy: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  packaging: "bg-purple-50 text-purple-700 border-purple-200",
-  transport: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  equipment: "bg-slate-50 text-slate-700 border-slate-200",
-  seeds: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  labor: "bg-sky-400/14 text-sky-200 border-sky-300/30",
+  fertilizer: "bg-lime-400/14 text-lime-200 border-lime-300/30",
+  pesticide: "bg-orange-400/14 text-orange-200 border-orange-300/30",
+  water: "bg-cyan-400/14 text-cyan-200 border-cyan-300/30",
+  energy: "bg-warning/14 text-warning border-warning/30",
+  packaging: "bg-purple-400/14 text-purple-200 border-purple-300/30",
+  transport: "bg-indigo-400/14 text-indigo-200 border-indigo-300/30",
+  equipment: "bg-muted/70 text-muted-foreground border-border",
+  seeds: "bg-success/14 text-success border-success/30",
   other: "bg-muted text-muted-foreground border-border",
 };
 

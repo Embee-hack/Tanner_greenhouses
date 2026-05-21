@@ -6,6 +6,7 @@ import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,9 +17,9 @@ import { createPageUrl } from "@/utils";
 import { getErrorMessage } from "@/lib/errors.js";
 
 const statusConfig = {
-  active: { label: "Active", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", border: "border-emerald-200" },
-  inactive: { label: "Inactive", bg: "bg-slate-50", text: "text-slate-500", dot: "bg-slate-400", border: "border-slate-200" },
-  maintenance: { label: "Maintenance", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", border: "border-amber-200" },
+  active: { label: "Active", bg: "bg-success/14", text: "text-success", dot: "bg-success", border: "border-success/35" },
+  inactive: { label: "Inactive", bg: "bg-muted/70", text: "text-muted-foreground", dot: "bg-muted-foreground", border: "border-border" },
+  maintenance: { label: "Maintenance", bg: "bg-warning/14", text: "text-warning", dot: "bg-warning", border: "border-warning/35" },
 };
 
 const blockColors = [
@@ -553,14 +554,11 @@ export default function Greenhouses() {
                     <div className="text-sm font-semibold text-foreground">{formatBlockLabel(block)}</div>
                     {block.notes && <div className="text-xs text-muted-foreground mt-0.5">{block.notes}</div>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => openEditBlock(block)} className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
-                      <Pencil className="w-3 h-3" /> Edit
-                    </button>
-                    <button onClick={() => setDeleteDialog({ kind: "block", item: block })} className="inline-flex items-center gap-1 text-xs text-danger hover:underline">
-                      <Trash2 className="w-3 h-3" /> Delete
-                    </button>
-                  </div>
+                  <RecordActions
+                    onEdit={() => openEditBlock(block)}
+                    onDelete={() => setDeleteDialog({ kind: "block", item: block })}
+                    ariaLabel={`Actions for ${formatBlockLabel(block)}`}
+                  />
                 </div>
               ))
             )}

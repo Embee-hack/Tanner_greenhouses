@@ -13,6 +13,7 @@ import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
 import FormField from "@/components/shared/FormField";
 import StatusBadge from "@/components/shared/StatusBadge";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { useCurrency } from "@/components/shared/CurrencyProvider";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
@@ -869,21 +870,11 @@ export default function Workers() {
                     <div className="text-sm font-medium text-foreground">{role.name}</div>
                     <div className="text-xs text-muted-foreground">Custom role</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" className="h-8" onClick={() => openEditRole(role)}>
-                      <Pencil className="w-4 h-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-danger hover:text-danger"
-                      onClick={() => setDeleteDialog({ kind: "role", item: role })}
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
+                  <RecordActions
+                    onEdit={() => openEditRole(role)}
+                    onDelete={() => setDeleteDialog({ kind: "role", item: role })}
+                    ariaLabel={`Actions for ${role.name}`}
+                  />
                 </div>
               ))
             )}

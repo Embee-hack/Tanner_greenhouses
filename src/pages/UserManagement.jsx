@@ -4,11 +4,12 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { UserPlus, Shield, User, Upload, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Shield, User, Upload, Eye, EyeOff } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import Modal from "@/components/shared/Modal";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
@@ -207,7 +208,7 @@ export default function UserManagement() {
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Email</th>
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Role</th>
               <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Joined</th>
-              <th className="px-5 py-3 text-left font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+              <th className="px-5 py-3 text-right font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -262,23 +263,12 @@ export default function UserManagement() {
                   <td className="px-5 py-3 text-muted-foreground text-xs hidden sm:table-cell">
                     {u.created_date ? new Date(u.created_date).toLocaleDateString() : "—"}
                   </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" className="h-8" onClick={() => openEditModal(u)}>
-                        <Pencil className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-danger hover:text-danger"
-                        onClick={() => setDeleteUser(u)}
-                        disabled={currentUser?.id === u.id}
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
+                  <td className="px-5 py-3 text-right">
+                    <RecordActions
+                      onEdit={() => openEditModal(u)}
+                      onDelete={currentUser?.id === u.id ? undefined : () => setDeleteUser(u)}
+                      ariaLabel={`Actions for ${u.full_name || u.email}`}
+                    />
                   </td>
                 </tr>
               ))

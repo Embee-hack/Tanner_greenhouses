@@ -8,12 +8,13 @@ import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import StatCard from "@/components/dashboard/StatCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, CalendarDays, Droplets, Pencil, Plus, Sprout, Trash2, Bug, FlaskConical } from "lucide-react";
+import { Activity, CalendarDays, Droplets, Plus, Sprout, Bug, FlaskConical } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
@@ -325,14 +326,11 @@ export default function GreenhouseDailyLogs() {
       key: "actions",
       label: "", noWrap: true, align: "right",
       render: (_, row) => (
-        <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditModal(row); }}>
-            <Pencil className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteItem(row); }}>
-            <Trash2 className="w-4 h-4 text-danger" />
-          </Button>
-        </div>
+        <RecordActions
+          onEdit={() => openEditModal(row)}
+          onDelete={() => setDeleteItem(row)}
+          ariaLabel={`Actions for greenhouse log on ${row.log_date}`}
+        />
       ),
     },
   ];

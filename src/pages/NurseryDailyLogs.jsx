@@ -8,11 +8,12 @@ import FormField from "@/components/shared/FormField";
 import EmptyState from "@/components/shared/EmptyState";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import RecordActions from "@/components/shared/RecordActions.jsx";
 import StatCard from "@/components/dashboard/StatCard.jsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Activity, CalendarDays, Droplets, Pencil, Plus, Sprout, Trash2 } from "lucide-react";
+import { Activity, CalendarDays, Droplets, Plus, Sprout } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
@@ -281,30 +282,11 @@ export default function NurseryDailyLogs() {
       key: "actions",
       label: "", noWrap: true, align: "right",
       render: (_value, row) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              openEditModal(row);
-            }}
-            aria-label={`Edit nursery log for ${row.log_date}`}
-          >
-            <Pencil className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDeleteItem(row);
-            }}
-            aria-label={`Delete nursery log for ${row.log_date}`}
-          >
-            <Trash2 className="w-4 h-4 text-danger" />
-          </Button>
-        </div>
+        <RecordActions
+          onEdit={() => openEditModal(row)}
+          onDelete={() => setDeleteItem(row)}
+          ariaLabel={`Actions for nursery log on ${row.log_date}`}
+        />
       ),
     },
   ];

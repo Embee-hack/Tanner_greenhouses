@@ -53,7 +53,7 @@ export default function HeaderControls({ showNotifications = true }) {
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 hover:bg-muted px-2 py-1.5 transition-colors"
+          className="flex items-center gap-2 rounded-full border border-border/80 bg-muted/45 hover:bg-muted/70 px-2 py-1.5 transition-colors shadow-[inset_0_1px_0_hsl(140_30%_90%/0.05)]"
           aria-label="Account menu"
         >
           {/* Avatar initials */}
@@ -70,9 +70,9 @@ export default function HeaderControls({ showNotifications = true }) {
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1.5 z-50 bg-card border border-border rounded-xl shadow-lg py-1.5 min-w-[180px]">
+          <div className="console-glass absolute right-0 top-full mt-1.5 z-50 bg-card/95 border border-border/80 rounded-2xl py-1.5 min-w-[180px]">
             {/* Full name header */}
-            <div className="px-4 py-2 border-b border-border mb-1">
+            <div className="px-4 py-2 border-b border-border/70 mb-1">
               <div className="text-xs font-semibold text-foreground truncate">{displayName}</div>
               {user?.email && user.full_name && (
                 <div className="text-xs text-muted-foreground truncate">{user.email}</div>
@@ -82,7 +82,7 @@ export default function HeaderControls({ showNotifications = true }) {
             <Link
               to="/modules"
               onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-2.5 px-4 py-2 text-xs text-foreground hover:bg-muted/70 transition-colors"
             >
               <LayoutGrid className="w-3.5 h-3.5 text-muted-foreground" />
               Switch Modules

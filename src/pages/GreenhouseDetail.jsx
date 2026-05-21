@@ -17,10 +17,10 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { cn } from "@/lib/utils";
 
 const severityConfig = {
-  low: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
-  medium: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
-  high: { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
-  critical: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
+  low: { bg: "bg-sky-400/14", text: "text-sky-200", border: "border-sky-300/30" },
+  medium: { bg: "bg-warning/14", text: "text-warning", border: "border-warning/30" },
+  high: { bg: "bg-orange-400/14", text: "text-orange-200", border: "border-orange-300/30" },
+  critical: { bg: "bg-danger/14", text: "text-danger", border: "border-danger/30" },
 };
 
 const statusDot = {
@@ -182,9 +182,9 @@ export default function GreenhouseDetail() {
   const revenueChart = Object.entries(revByMonth).sort().slice(-8).map(([m, v]) => ({ month: m.slice(5), revenue: parseFloat(v.toFixed(0)) }));
 
   const statusConfig = {
-    active: { label: "Active", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    inactive: { label: "Inactive", cls: "bg-slate-100 text-slate-500 border-slate-200" },
-    maintenance: { label: "Maintenance", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    active: { label: "Active", cls: "bg-success/14 text-success border-success/35" },
+    inactive: { label: "Inactive", cls: "bg-muted/70 text-muted-foreground border-border" },
+    maintenance: { label: "Maintenance", cls: "bg-warning/14 text-warning border-warning/35" },
   };
   const sc = statusConfig[gh.status] || statusConfig.active;
 
@@ -232,11 +232,11 @@ export default function GreenhouseDetail() {
 
       {/* Active incidents alert */}
       {openIncidents.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+        <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
           <div>
-            <div className="text-sm font-semibold text-amber-800">{openIncidents.length} active incident{openIncidents.length > 1 ? "s" : ""}</div>
-            <div className="text-xs text-amber-700 mt-0.5">{openIncidents.map(i => getIncidentTitle(i)).join(" · ")}</div>
+            <div className="text-sm font-semibold text-warning">{openIncidents.length} active incident{openIncidents.length > 1 ? "s" : ""}</div>
+            <div className="text-xs text-warning/85 mt-0.5">{openIncidents.map(i => getIncidentTitle(i)).join(" · ")}</div>
           </div>
         </div>
       )}
@@ -311,9 +311,9 @@ export default function GreenhouseDetail() {
                     <div className="text-xs text-muted-foreground">{c.planting_date} → {c.end_date || "ongoing"} · {c.plants_planted?.toLocaleString()} plants</div>
                   </div>
                   <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium border", {
-                    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-                    completed: "bg-blue-50 text-blue-700 border-blue-200",
-                    abandoned: "bg-slate-100 text-slate-500 border-slate-200",
+                    active: "bg-success/14 text-success border-success/35",
+                    completed: "bg-sky-400/14 text-sky-200 border-sky-300/30",
+                    abandoned: "bg-muted/70 text-muted-foreground border-border",
                   }[c.status])}>{c.status}</span>
                 </div>
               ))}
@@ -338,7 +338,7 @@ export default function GreenhouseDetail() {
                   <div key={inc.id} className="px-5 py-3">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <span className={cn("w-2 h-2 rounded-full", statusDot[inc.status] || "bg-gray-400")} />
+                        <span className={cn("w-2 h-2 rounded-full", statusDot[inc.status] || "bg-muted-foreground")} />
                         <span className="text-sm font-semibold">{getIncidentTitle(inc)}</span>
                       </div>
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", sev.bg, sev.text, sev.border)}>{inc.severity}</span>

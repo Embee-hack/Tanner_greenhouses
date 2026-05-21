@@ -135,30 +135,30 @@ function generateAlerts(harvests, incidents, expenses, inventoryItems = [], gree
 
 const PRIORITY_CONFIG = {
   critical: {
-    container: "bg-red-50 border-red-200",
-    badge: "bg-red-100 text-red-700 border border-red-200",
-    icon: "text-red-600",
+    container: "bg-danger/10 border-danger/25",
+    badge: "bg-danger/14 text-danger border border-danger/30",
+    icon: "text-danger",
     dot: "bg-red-500",
     label: "CRITICAL",
   },
   high: {
-    container: "bg-orange-50 border-orange-200",
-    badge: "bg-orange-100 text-orange-700 border border-orange-200",
-    icon: "text-orange-500",
+    container: "bg-orange-400/10 border-orange-300/25",
+    badge: "bg-orange-400/14 text-orange-200 border border-orange-300/30",
+    icon: "text-orange-300",
     dot: "bg-orange-500",
     label: "HIGH",
   },
   medium: {
-    container: "bg-yellow-50 border-yellow-200",
-    badge: "bg-yellow-100 text-yellow-700 border border-yellow-200",
-    icon: "text-yellow-600",
+    container: "bg-warning/10 border-warning/25",
+    badge: "bg-warning/14 text-warning border border-warning/30",
+    icon: "text-warning",
     dot: "bg-yellow-500",
     label: "MEDIUM",
   },
   info: {
-    container: "bg-blue-50 border-blue-200",
-    badge: "bg-blue-50 text-blue-700 border border-blue-200",
-    icon: "text-blue-500",
+    container: "bg-sky-400/10 border-sky-300/25",
+    badge: "bg-sky-400/14 text-sky-200 border border-sky-300/30",
+    icon: "text-sky-300",
     dot: "bg-blue-400",
     label: "INFO",
   },
@@ -183,9 +183,9 @@ export default function AlertsBanner({
   if (alerts.length === 0) return null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+    <div className="console-glass bg-card/85 border rounded-2xl overflow-hidden">
       {/* Banner header */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/20">
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-border/70 bg-muted/30">
         <Bell className="w-4 h-4 text-muted-foreground" />
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex-1">Smart Alerts</span>
         {criticalCount > 0 && (
@@ -205,7 +205,7 @@ export default function AlertsBanner({
           return (
             <div
               key={alert.id}
-              className={cn("flex items-start gap-3 px-5 py-3 border-l-4 transition-colors hover:brightness-[0.97]", cfg.container, `border-l-[${cfg.dot.replace("bg-", "")}]`)}
+              className={cn("flex items-start gap-3 px-5 py-3 border-l-4 transition-colors hover:bg-muted/20", cfg.container)}
               style={{
                 borderLeftColor: {
                   critical: "#ef4444",
