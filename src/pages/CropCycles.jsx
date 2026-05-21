@@ -204,6 +204,13 @@ export default function CropCycles() {
     setShowCatalogModal(true);
   };
 
+  useEffect(() => {
+    const settingsPanel = new URLSearchParams(location.search).get("settings");
+    if (settingsPanel !== "crops" || loading || showCatalogModal) return;
+    openCatalogModal();
+    navigate(createPageUrl("CropCycles"), { replace: true });
+  }, [location.search, loading, navigate, showCatalogModal]);
+
   const closeCatalogModal = () => {
     setShowCatalogModal(false);
     setEditingCropType(null);

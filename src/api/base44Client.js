@@ -241,6 +241,12 @@ const entities = new Proxy(
 export const base44 = {
   entities,
 
+  dashboard: {
+    async greenhouse() {
+      return request("/api/dashboard/greenhouse");
+    },
+  },
+
   auth: {
     async bootstrap() {
       return request("/api/auth/bootstrap", { auth: false });

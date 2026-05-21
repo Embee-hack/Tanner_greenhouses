@@ -17,11 +17,33 @@ import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
 const CATS = ["fertilizer","pesticide","seeds","packaging","equipment","tools","other"];
-const defaultForm = { name: "", category: "fertilizer", unit: "", quantity_in_stock: "", reorder_level: "", unit_cost: "", supplier: "", greenhouse_id: "", notes: "", image_url: "" };
+const getDefaultForm = () => ({
+  name: "",
+  category: "fertilizer",
+  unit: "",
+  quantity_in_stock: "",
+  reorder_level: "",
+  unit_cost: "",
+  supplier: "",
+  purchase_date: new Date().toISOString().slice(0, 10),
+  greenhouse_id: "",
+  notes: "",
+  image_url: "",
+});
 
-function StockAdjustModal({ item, onClose, onDone, fmt }) {
+const formatDate = (value) => {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${value}T00:00:00`));
+  } catch {
+    return value;
+  }
+};
+
+function StockAdjustModal({ item, onClose, onDone }) {
   const [mode, setMode] = useState("add"); // "add" | "remove"
   const [qty, setQty] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,7 +56,10 @@ function StockAdjustModal({ item, onClose, onDone, fmt }) {
       const newQty = mode === "add"
         ? (item.quantity_in_stock || 0) + amount
         : Math.max(0, (item.quantity_in_stock || 0) - amount);
-      await base44.entities.InventoryItem.update(item.id, { quantity_in_stock: newQty });
+      await base44.entities.InventoryItem.update(item.id, {
+        quantity_in_stock: newQty,
+        ...(mode === "add" ? { purchase_date: purchaseDate || item.purchase_date || null } : {}),
+      });
       onDone();
     } catch (err) {
       setError(getErrorMessage(err, "Failed to adjust stock."));
@@ -62,6 +87,11 @@ function StockAdjustModal({ item, onClose, onDone, fmt }) {
         <FormField label={`Quantity to ${mode === "add" ? "add" : "remove"} (${item.unit})`} required>
           <Input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="0" min="0" step="0.01" autoFocus />
         </FormField>
+        {mode === "add" ? (
+          <FormField label="Purchase Date">
+            <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
+          </FormField>
+        ) : null}
         {qty && parseFloat(qty) > 0 && (
           <div className="text-xs text-center text-muted-foreground">
             New stock: <strong>{mode === "add"
@@ -91,7 +121,7 @@ export default function Inventory() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState(getDefaultForm);
   const [saving, setSaving] = useState(false);
   const [catFilter, setCatFilter] = useState("all");
   const [adjustItem, setAdjustItem] = useState(null);
@@ -131,23 +161,29 @@ export default function Inventory() {
     setError("");
     setEditItem(item);
     setForm({
-      ...defaultForm,
+      ...getDefaultForm(),
       ...item,
       quantity_in_stock: item.quantity_in_stock ?? "",
       reorder_level: item.reorder_level ?? "",
       unit_cost: item.unit_cost ?? "",
+      purchase_date: item.purchase_date || "",
     });
     setShowModal(true);
     navigate(createPageUrl("Inventory"), { replace: true });
   }, [items, location.search, navigate, showModal]);
 
-  const ghMap = Object.fromEntries(greenhouses.map(g => [g.id, g]));
-
-  const openAdd = () => { setError(""); setEditItem(null); setForm(defaultForm); setShowModal(true); };
+  const openAdd = () => { setError(""); setEditItem(null); setForm(getDefaultForm()); setShowModal(true); };
   const openEdit = (item) => {
     setError("");
     setEditItem(item);
-    setForm({ ...defaultForm, ...item, quantity_in_stock: item.quantity_in_stock ?? "", reorder_level: item.reorder_level ?? "", unit_cost: item.unit_cost ?? "" });
+    setForm({
+      ...getDefaultForm(),
+      ...item,
+      quantity_in_stock: item.quantity_in_stock ?? "",
+      reorder_level: item.reorder_level ?? "",
+      unit_cost: item.unit_cost ?? "",
+      purchase_date: item.purchase_date || "",
+    });
     setShowModal(true);
   };
 
@@ -179,6 +215,7 @@ export default function Inventory() {
         quantity_in_stock: parseFloat(form.quantity_in_stock) || 0,
         reorder_level: form.reorder_level !== "" ? parseFloat(form.reorder_level) : null,
         unit_cost: form.unit_cost !== "" ? parseFloat(form.unit_cost) : null,
+        purchase_date: form.purchase_date || null,
         greenhouse_id: form.greenhouse_id || null,
       };
       if (editItem) {
@@ -285,6 +322,7 @@ export default function Inventory() {
                     {item.quantity_in_stock?.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span>
                   </div>
                   {totalVal > 0 && <div className="text-xs text-muted-foreground">Value: {fmt(totalVal)}</div>}
+                  {item.purchase_date && <div className="text-xs text-muted-foreground">Purchased: {formatDate(item.purchase_date)}</div>}
                   {item.supplier && <div className="text-xs text-muted-foreground truncate">{item.supplier}</div>}
 
                   {/* Quick stock adjust */}
@@ -314,7 +352,6 @@ export default function Inventory() {
       {adjustItem && (
         <StockAdjustModal
           item={adjustItem}
-          fmt={fmt}
           onClose={() => setAdjustItem(null)}
           onDone={() => { setAdjustItem(null); load(); }}
         />
@@ -371,8 +408,22 @@ export default function Inventory() {
             <FormField label="Unit Cost">
               <Input type="number" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: e.target.value }))} placeholder="0.00" step="0.01" />
             </FormField>
+            <FormField label="Purchase Date">
+              <Input type="date" value={form.purchase_date} onChange={e => setForm(f => ({ ...f, purchase_date: e.target.value }))} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <FormField label="Supplier">
               <Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier name" />
+            </FormField>
+            <FormField label="Greenhouse">
+              <Select value={form.greenhouse_id || "__none__"} onValueChange={v => setForm(f => ({ ...f, greenhouse_id: v === "__none__" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No greenhouse</SelectItem>
+                  {greenhouses.map(g => <SelectItem key={g.id} value={g.id}>{g.code}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </FormField>
           </div>
           <FormField label="Notes">

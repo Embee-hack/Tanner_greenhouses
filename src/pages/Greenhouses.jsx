@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, Sprout, Pencil, Maximize2, Layers, CheckCircle2, LayoutGrid, Trash2, MoreHorizontal, ArrowUpRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { getErrorMessage } from "@/lib/errors.js";
 
@@ -164,6 +164,7 @@ const NONE_VALUE = "__none__";
 
 export default function Greenhouses() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [greenhouses, setGreenhouses] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -233,6 +234,13 @@ export default function Greenhouses() {
     setBlockForm(defaultBlockForm);
     setShowBlockModal(true);
   };
+
+  useEffect(() => {
+    const settingsPanel = new URLSearchParams(location.search).get("settings");
+    if (settingsPanel !== "blocks" || loading || showBlockModal) return;
+    openBlockModal();
+    navigate(createPageUrl("Greenhouses"), { replace: true });
+  }, [location.search, loading, navigate, showBlockModal]);
 
   const openEditBlock = (block) => {
     setBlockError("");

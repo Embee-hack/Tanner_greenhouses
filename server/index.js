@@ -1205,6 +1205,64 @@ app.get("/api/worker-attendance/day", requireAuth, asyncHandler(async (req, res)
   res.json(rows.map((item) => sanitizeEntityDataForUser(req.user, "WorkerAttendance", item)));
 }));
 
+app.get("/api/dashboard/greenhouse", requireAuth, asyncHandler(async (req, res) => {
+  const configs = [
+    { entity: "Greenhouse", sort: "code" },
+    { entity: "CropCycle" },
+    { entity: "HarvestRecord", sort: "-date", limit: 500 },
+    ...(isAdmin(req.user) ? [
+      { entity: "SalesRecord", sort: "-date", limit: 500 },
+      { entity: "ExpenseRecord", sort: "-date", limit: 500 },
+    ] : []),
+    { entity: "PlantPopulationLog", sort: "-date", limit: 500 },
+    { entity: "Incident", sort: "-date", limit: 100 },
+    { entity: "InventoryItem", sort: "-updated_date", limit: 200 },
+    { entity: "CalendarEvent", sort: "date", limit: 120 },
+  ].filter((config) => canReadEntity(req.user, config.entity));
+
+  const entityNames = configs.map((config) => config.entity);
+  const [rows, users, workerCount] = await Promise.all([
+    prisma.entityRecord.findMany({ where: { entity: { in: entityNames } } }),
+    prisma.user.findMany({ select: { email: true, full_name: true } }),
+    canReadEntity(req.user, "Worker") ? prisma.entityRecord.count({ where: { entity: "Worker" } }) : Promise.resolve(0),
+  ]);
+  const userDisplayMap = buildUserDisplayMap(users);
+  const rowsByEntity = new Map();
+
+  rows.forEach((row) => {
+    if (!rowsByEntity.has(row.entity)) rowsByEntity.set(row.entity, []);
+    rowsByEntity.get(row.entity).push(row);
+  });
+
+  const payload = {};
+  configs.forEach((config) => {
+    const items = (rowsByEntity.get(config.entity) || []).map((row) =>
+      sanitizeEntityDataForUser(
+        req.user,
+        config.entity,
+        attachUserDisplayFields(toEntityOutput(row), userDisplayMap)
+      )
+    );
+    const sorted = sortItems(items, config.sort);
+    payload[config.entity] = config.limit ? sorted.slice(0, config.limit) : sorted;
+  });
+
+  res.json({
+    greenhouses: payload.Greenhouse || [],
+    cycles: payload.CropCycle || [],
+    harvests: payload.HarvestRecord || [],
+    sales: payload.SalesRecord || [],
+    expenses: payload.ExpenseRecord || [],
+    popLogs: payload.PlantPopulationLog || [],
+    incidents: payload.Incident || [],
+    inventoryItems: payload.InventoryItem || [],
+    workers: [],
+    workerCount,
+    calendarEvents: payload.CalendarEvent || [],
+    loadedAt: new Date().toISOString(),
+  });
+}));
+
 app.get("/api/entities/:entity", requireAuth, async (req, res) => {
   const { entity } = req.params;
   const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;

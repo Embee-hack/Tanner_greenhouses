@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Users,
   HardHat,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { base44 } from "@/api/base44Client";
@@ -28,6 +29,7 @@ import { initNotificationStore } from "@/components/shared/NotificationStore.jsx
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
 import HeaderControls from "@/components/navigation/HeaderControls.jsx";
+import PageHelp from "@/components/shared/PageHelp.jsx";
 import { setStoredModuleKey } from "@/lib/modules";
 
 const dashboardItem = { label: "Dashboard", icon: LayoutDashboard, page: "Dashboard" };
@@ -42,7 +44,7 @@ const groupedNav = [
       { label: "Greenhouses", icon: Sprout, page: "Greenhouses" },
       { label: "Daily Logs", icon: CalendarDays, page: "GreenhouseDailyLogs" },
       { label: "Crop Cycles", icon: Leaf, page: "CropCycles" },
-      { label: "Harvests", icon: BarChart3, page: "Harvests" },
+      { label: "Harvest & Sales", icon: BarChart3, page: "Harvests" },
       { label: "Inventory", icon: Package, page: "Inventory" },
     ],
   },
@@ -72,7 +74,7 @@ const groupedNav = [
     icon: DollarSign,
     defaultOpen: false,
     items: [
-      { label: "Sales", icon: ShoppingCart, page: "Sales" },
+      { label: "Sales Reports", icon: ShoppingCart, page: "Sales" },
       { label: "Expenses", icon: DollarSign, page: "Expenses" },
     ],
   },
@@ -107,6 +109,15 @@ const groupedNav = [
       { label: "Activity Log", icon: Activity, page: "ActivityLog", ownerOnly: true },
     ],
   },
+  {
+    key: "settings",
+    label: "Settings",
+    icon: Settings,
+    defaultOpen: false,
+    items: [
+      { label: "Settings", icon: Settings, page: "Settings" },
+    ],
+  },
 ];
 
 const defaultFooterStats = {
@@ -131,6 +142,7 @@ function LayoutInner({ children, currentPageName }) {
   const DashboardIcon = dashboardItem.icon;
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [footerStats, setFooterStats] = useState(defaultFooterStats);
   const [openSections, setOpenSections] = useState(() =>
@@ -331,6 +343,7 @@ function LayoutInner({ children, currentPageName }) {
               <span className="hidden sm:inline text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Farm Manager</span>
             )}
           </div>
+          <PageHelp pageName={currentPageName} open={helpOpen} onOpenChange={setHelpOpen} />
           <HeaderControls showNotifications={isOwner} />
         </header>
 

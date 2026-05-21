@@ -62,7 +62,8 @@ const defaultForm = {
 
 const getItemLabel = (row) => {
   if (!row?.crop_type) return "—";
-  return row.variety ? `${row.crop_type} · ${row.variety}` : row.crop_type;
+  const cropLabel = row.variety ? `${row.crop_type} · ${row.variety}` : row.crop_type;
+  return row.sale_grade ? `${cropLabel} · ${row.sale_grade}` : cropLabel;
 };
 
 const formatMonthLabel = (monthKey) => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
@@ -14,6 +15,7 @@ import StatusBadge from "@/components/shared/StatusBadge";
 import DeleteConfirmDialog from "@/components/shared/DeleteConfirmDialog.jsx";
 import { useCurrency } from "@/components/shared/CurrencyProvider";
 import { getErrorMessage } from "@/lib/errors.js";
+import { createPageUrl } from "@/utils";
 
 const normalizeGreenhouseIds = (worker) => {
   if (Array.isArray(worker?.greenhouse_ids)) return worker.greenhouse_ids.filter(Boolean);
@@ -92,6 +94,8 @@ export default function Workers() {
   const { fmt } = useCurrency();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [workers, setWorkers] = useState([]);
   const [greenhouses, setGreenhouses] = useState([]);
   const [roleCatalog, setRoleCatalog] = useState([]);
@@ -299,6 +303,13 @@ export default function Workers() {
     setEditingRole(null);
     setShowRoleModal(true);
   };
+
+  useEffect(() => {
+    const settingsPanel = new URLSearchParams(location.search).get("settings");
+    if (settingsPanel !== "roles" || loading || showRoleModal || !isAdmin) return;
+    openRoleManager();
+    navigate(createPageUrl("Workers"), { replace: true });
+  }, [isAdmin, loading, location.search, navigate, showRoleModal]);
 
   const openEditRole = (role) => {
     setEditingRole(role);

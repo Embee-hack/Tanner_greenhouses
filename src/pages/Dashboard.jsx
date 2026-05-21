@@ -4,19 +4,33 @@ import StatCard from "@/components/dashboard/StatCard";
 import GreenhouseTile from "@/components/dashboard/GreenhouseTile";
 import AlertsBanner from "@/components/dashboard/AlertsBanner";
 import ErrorBanner from "@/components/shared/ErrorBanner.jsx";
+import LaunchChecklist from "@/components/shared/LaunchChecklist.jsx";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/roles.js";
 import { useCurrency } from "@/components/shared/CurrencyProvider.jsx";
 import { getErrorMessage } from "@/lib/errors.js";
 import { getIncidentTitle, getIncidentTypeLabel, isIncidentActive } from "@/lib/incidents.js";
+import { buildLaunchChecklistItems } from "@/lib/launchChecklist.js";
+import { getDashboardCacheKey, normalizeDashboardData, readDashboardCache, writeDashboardCache } from "@/lib/dashboardSnapshot.js";
 import { createPageUrl } from "@/utils";
 import {
-  ArrowRight, CalendarDays, CheckCircle2, CircleDashed, DollarSign, TrendingUp, Package, Sprout, BarChart2, ShoppingCart, AlertTriangle, Warehouse, Users
+  CalendarDays, DollarSign, TrendingUp, Package, Sprout, BarChart2, ShoppingCart, AlertTriangle, Warehouse, Users
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend
 } from "recharts";
 import { Link } from "react-router-dom";
+
+function ActionLink({ to, children, variant = "ghost" }) {
+  return (
+    <Button asChild size="sm" variant={variant} className="h-8 px-2.5 text-xs font-semibold">
+      <Link to={to}>
+        {children}
+      </Link>
+    </Button>
+  );
+}
 
 const getLast12MonthKeys = () => {
   const keys = [];
@@ -85,55 +99,96 @@ export default function Dashboard() {
   const { fmt } = useCurrency();
   const { user } = useAuth();
   const isAdmin = isAdminUser(user);
-  const [greenhouses, setGreenhouses] = useState([]);
-  const [cycles, setCycles] = useState([]);
-  const [harvests, setHarvests] = useState([]);
-  const [sales, setSales] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [popLogs, setPopLogs] = useState([]);
-  const [incidents, setIncidents] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [workers, setWorkers] = useState([]);
-  const [calendarEvents, setCalendarEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = getDashboardCacheKey(isAdmin);
+  const cachedDashboard = readDashboardCache(cacheKey);
+  const [greenhouses, setGreenhouses] = useState(() => cachedDashboard?.greenhouses || []);
+  const [cycles, setCycles] = useState(() => cachedDashboard?.cycles || []);
+  const [harvests, setHarvests] = useState(() => cachedDashboard?.harvests || []);
+  const [sales, setSales] = useState(() => cachedDashboard?.sales || []);
+  const [expenses, setExpenses] = useState(() => cachedDashboard?.expenses || []);
+  const [popLogs, setPopLogs] = useState(() => cachedDashboard?.popLogs || []);
+  const [incidents, setIncidents] = useState(() => cachedDashboard?.incidents || []);
+  const [inventoryItems, setInventoryItems] = useState(() => cachedDashboard?.inventoryItems || []);
+  const [workerCount, setWorkerCount] = useState(() => cachedDashboard?.workerCount ?? cachedDashboard?.workers?.length ?? 0);
+  const [calendarEvents, setCalendarEvents] = useState(() => cachedDashboard?.calendarEvents || []);
+  const [loading, setLoading] = useState(() => !cachedDashboard);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState("");
 
+  const applyDashboardData = (data) => {
+    const next = normalizeDashboardData(data);
+    setGreenhouses(next.greenhouses);
+    setCycles(next.cycles);
+    setHarvests(next.harvests);
+    setSales(next.sales);
+    setExpenses(next.expenses);
+    setPopLogs(next.popLogs);
+    setIncidents(next.incidents);
+    setInventoryItems(next.inventoryItems);
+    setWorkerCount(next.workerCount ?? next.workers.length);
+    setCalendarEvents(next.calendarEvents);
+  };
+
+  const loadDashboardDataFallback = async () => {
+    const [gh, cy, ha, sa, ex, po, inc, inv, workerRows, eventRows] = await Promise.all([
+      base44.entities.Greenhouse.list("code"),
+      base44.entities.CropCycle.list(),
+      base44.entities.HarvestRecord.list("-date", 500),
+      isAdmin ? base44.entities.SalesRecord.list("-date", 500) : Promise.resolve([]),
+      isAdmin ? base44.entities.ExpenseRecord.list("-date", 500) : Promise.resolve([]),
+      base44.entities.PlantPopulationLog.list("-date", 500),
+      base44.entities.Incident.list("-date", 100),
+      base44.entities.InventoryItem.list("-updated_date", 200),
+      base44.entities.Worker.list(),
+      base44.entities.CalendarEvent.list("date", 120),
+    ]);
+
+    return {
+      greenhouses: gh,
+      cycles: cy,
+      harvests: ha,
+      sales: sa,
+      expenses: ex,
+      popLogs: po,
+      incidents: inc,
+      inventoryItems: inv,
+      workers: workerRows,
+      workerCount: workerRows.length,
+      calendarEvents: eventRows,
+    };
+  };
+
   const load = async () => {
+    const cached = readDashboardCache(cacheKey);
     try {
-      setLoading(true);
-      const [gh, cy, ha, sa, ex, po, inc, inv, workerRows, eventRows] = await Promise.all([
-        base44.entities.Greenhouse.list("code"),
-        base44.entities.CropCycle.list(),
-        base44.entities.HarvestRecord.list("-date", 500),
-        isAdmin ? base44.entities.SalesRecord.list("-date", 500) : Promise.resolve([]),
-        isAdmin ? base44.entities.ExpenseRecord.list("-date", 500) : Promise.resolve([]),
-        base44.entities.PlantPopulationLog.list("-date", 500),
-        base44.entities.Incident.list("-date", 100),
-        base44.entities.InventoryItem.list("-updated_date", 200),
-        base44.entities.Worker.list(),
-        base44.entities.CalendarEvent.list("date", 120),
-      ]);
-      setGreenhouses(gh);
-      setCycles(cy);
-      setHarvests(ha);
-      setSales(sa);
-      setExpenses(ex);
-      setPopLogs(po);
-      setIncidents(inc);
-      setInventoryItems(inv);
-      setWorkers(workerRows);
-      setCalendarEvents(eventRows);
+      if (cached) {
+        applyDashboardData(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+      setRefreshing(true);
+      let data;
+      try {
+        data = await base44.dashboard.greenhouse();
+      } catch (err) {
+        if (err?.status !== 404) throw err;
+        data = await loadDashboardDataFallback();
+      }
+      applyDashboardData(data);
+      writeDashboardCache(cacheKey, data);
       setLoadError("");
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load dashboard data."));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     load();
-  }, [isAdmin]);
+  }, [cacheKey]);
 
   const totalRevenue = sales.reduce((s, r) => s + (r.revenue || r.kg_sold * r.price_per_kg || 0), 0);
   const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
@@ -233,22 +288,17 @@ export default function Dashboard() {
   const weekEnd = new Date(todayStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const checklistItems = [
-    { key: "greenhouses", label: "Register at least one greenhouse", done: greenhouses.length > 0, href: createPageUrl("Greenhouses"), action: greenhouses.length > 0 ? "Review setup" : "Add greenhouse" },
-    { key: "cycles", label: "Start an active crop cycle", done: activeCycles > 0, href: createPageUrl("CropCycles"), action: activeCycles > 0 ? "Manage cycles" : "Start cycle" },
-    { key: "inventory", label: "Stock your inventory", done: inventoryItems.length > 0, href: createPageUrl("Inventory"), action: inventoryItems.length > 0 ? "Review stock" : "Add stock" },
-    { key: "workers", label: "Add and assign workers", done: workers.length > 0, href: createPageUrl("Workers"), action: workers.length > 0 ? "Manage team" : "Add workers" },
-    { key: "calendar", label: "Schedule upcoming work", done: calendarEvents.length > 0, href: createPageUrl("FarmCalendar"), action: calendarEvents.length > 0 ? "Open calendar" : "Add event" },
-    { key: "harvests", label: "Log the first harvest", done: harvests.length > 0, href: createPageUrl("Harvests"), action: harvests.length > 0 ? "Review harvests" : "Log harvest" },
-    ...(isAdmin
-      ? [
-          { key: "sales", label: "Record the first sale", done: sales.length > 0, href: createPageUrl("Sales"), action: sales.length > 0 ? "Open sales" : "Record sale" },
-          { key: "expenses", label: "Record the first expense", done: expenses.length > 0, href: createPageUrl("Expenses"), action: expenses.length > 0 ? "Open expenses" : "Record expense" },
-        ]
-      : []),
-  ];
-
-  const completedChecklistCount = checklistItems.filter((item) => item.done).length;
+  const checklistItems = buildLaunchChecklistItems({
+    greenhouses,
+    cycles,
+    harvests,
+    sales,
+    expenses,
+    inventoryItems,
+    workerCount,
+    calendarEvents,
+  }, isAdmin);
+  const pendingChecklistItems = checklistItems.filter((item) => !item.done);
   const urgentIncidents = incidents
     .filter((incident) => isIncidentActive(incident.status))
     .sort((a, b) => {
@@ -276,6 +326,13 @@ export default function Dashboard() {
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-5">
       <ErrorBanner message={loadError} onRetry={load} />
+      {refreshing && !loading ? (
+        <div className="flex justify-end">
+          <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            Syncing dashboard...
+          </span>
+        </div>
+      ) : null}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -310,47 +367,19 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h3 className="font-semibold text-sm text-foreground">Launch Checklist</h3>
-              <p className="text-xs text-muted-foreground mt-1">{completedChecklistCount} of {checklistItems.length} setup steps completed</p>
-            </div>
-            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              {Math.round((completedChecklistCount / Math.max(checklistItems.length, 1)) * 100)}% ready
-            </span>
-          </div>
+        {pendingChecklistItems.length > 0 ? (
+          <LaunchChecklist items={pendingChecklistItems} title="Launch Checklist" mode="pending" />
+        ) : null}
 
-          <div className="space-y-2">
-            {checklistItems.map((item) => (
-              <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className={item.done ? "text-success" : "text-muted-foreground"}>
-                    {item.done ? <CheckCircle2 className="h-4 w-4 mt-0.5" /> : <CircleDashed className="h-4 w-4 mt-0.5" />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.done ? "Completed" : "Still needed before launch"}</p>
-                  </div>
-                </div>
-                <Link to={item.href} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80">
-                  {item.action}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-card rounded-2xl border border-border p-4 sm:p-5">
+        <div className={`bg-card rounded-2xl border border-border p-4 sm:p-5 ${pendingChecklistItems.length === 0 ? "xl:col-span-2" : ""}`}>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="font-semibold text-sm text-foreground">Upcoming This Week</h3>
               <p className="text-xs text-muted-foreground mt-1">Active incidents and scheduled work over the next 7 days</p>
             </div>
-            <Link to={createPageUrl("FarmCalendar")} className="text-xs font-semibold text-primary hover:text-primary/80">
+            <ActionLink to={createPageUrl("FarmCalendar")}>
               Open Calendar
-            </Link>
+            </ActionLink>
           </div>
 
           {urgentIncidents.length === 0 && upcomingEvents.length === 0 ? (
@@ -508,12 +537,12 @@ export default function Dashboard() {
             <p className="text-sm font-medium text-foreground">No active greenhouse performance data yet</p>
             <p className="text-xs text-muted-foreground mt-1">Start an active crop cycle and log plant or harvest activity to unlock these performance tiles.</p>
             <div className="mt-4 flex items-center justify-center gap-3">
-              <Link to={createPageUrl("Greenhouses")} className="text-xs font-semibold text-primary hover:text-primary/80">
+              <ActionLink to={createPageUrl("Greenhouses")} variant="outline">
                 Manage Greenhouses
-              </Link>
-              <Link to={createPageUrl("CropCycles")} className="text-xs font-semibold text-primary hover:text-primary/80">
+              </ActionLink>
+              <ActionLink to={createPageUrl("CropCycles")} variant="outline">
                 Start Crop Cycle
-              </Link>
+              </ActionLink>
             </div>
           </div>
         ) : (

@@ -61,6 +61,7 @@ import Inventory from './pages/Inventory';
 import NurseryBatches from './pages/NurseryBatches';
 import NurseryDailyLogs from './pages/NurseryDailyLogs';
 import Sales from './pages/Sales';
+import Settings from './pages/Settings';
 import Treatments from './pages/Treatments';
 import UserManagement from './pages/UserManagement';
 import WorkerAttendance from './pages/WorkerAttendance';
@@ -84,6 +85,7 @@ export const PAGES = {
     "NurseryBatches": NurseryBatches,
     "NurseryDailyLogs": NurseryDailyLogs,
     "Sales": Sales,
+    "Settings": Settings,
     "Treatments": Treatments,
     "UserManagement": UserManagement,
     "WorkerAttendance": WorkerAttendance,

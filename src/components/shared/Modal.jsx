@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,14 +12,14 @@ export default function Modal({ open, onClose, title, children, size = "md" }) {
     xl: "max-w-4xl",
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-16 sm:pt-20">
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={cn(
-        "relative bg-card rounded-2xl border border-border shadow-2xl w-full max-h-[90vh] overflow-y-auto",
+        "relative bg-card rounded-2xl border border-border shadow-2xl w-full max-h-[calc(100vh-5rem)] overflow-hidden flex flex-col",
         sizeMap[size]
       )}>
-        <div className="flex items-center justify-between p-5 border-b border-border sticky top-0 bg-card z-10">
+        <div className="flex items-center justify-between p-5 border-b border-border bg-card z-10 flex-shrink-0">
           <h3 className="text-base font-semibold text-foreground">{title}</h3>
           <button
             onClick={onClose}
@@ -27,8 +28,9 @@ export default function Modal({ open, onClose, title, children, size = "md" }) {
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
