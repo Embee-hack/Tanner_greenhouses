@@ -13,8 +13,17 @@ const initialValues = {
   expense_date: "",
   category: "",
   amount: "",
+  payment_method: "cash",
   description: "",
 };
+
+const paymentMethodOptions = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+];
+
+const formatPaymentMethod = (value) =>
+  paymentMethodOptions.find((method) => method.value === value)?.label || "Cash";
 
 export default function PoultryExpenses() {
   const { fmt } = useCurrency();
@@ -72,6 +81,7 @@ export default function PoultryExpenses() {
         { key: "category", label: "Category" },
         { key: "flock", label: "Flock", render: (_value, row) => row.flock?.flock_code || "—" },
         { key: "amount", label: "Amount", render: (value) => fmt(value) },
+        { key: "payment_method", label: "Payment", render: (value) => formatPaymentMethod(value) },
         { key: "description", label: "Description", render: (value) => value || "—" },
       ]}
       records={records}
@@ -90,16 +100,19 @@ export default function PoultryExpenses() {
         { key: "expense_date", label: "Expense date", type: "date", required: true },
         { key: "category", label: "Category", required: true, placeholder: "Medication" },
         { key: "amount", label: "Amount", type: "number", required: true, min: 0, step: "0.01" },
+        { key: "payment_method", label: "Payment method", type: "select", required: true, options: paymentMethodOptions },
         { key: "description", label: "Description", type: "textarea", fullWidth: true, placeholder: "Expense details" },
       ]}
       mapToForm={(row) => ({
         ...row,
         flock_id: row.flock_id || "__none__",
         expense_date: row.expense_date || "",
+        payment_method: row.payment_method || "cash",
       })}
       buildPayload={(form) => ({
         ...form,
         flock_id: normalizeOptionalValue(form.flock_id),
+        payment_method: form.payment_method || "cash",
       })}
       onCreate={async (payload) => {
         await poultryClient.expenses.create(payload);

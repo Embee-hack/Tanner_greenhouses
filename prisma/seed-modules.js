@@ -362,6 +362,7 @@ async function seedPoultrySampleData() {
         expense_date: daysAgo(11),
         category: "feed",
         amount: 168000,
+        payment_method: "bank",
         description: `${SAMPLE_MARKER} Layer mash purchase`,
       },
       {
@@ -369,6 +370,7 @@ async function seedPoultrySampleData() {
         expense_date: daysAgo(8),
         category: "feed",
         amount: 201600,
+        payment_method: "bank",
         description: `${SAMPLE_MARKER} Finisher mash purchase`,
       },
       {
@@ -376,6 +378,7 @@ async function seedPoultrySampleData() {
         expense_date: daysAgo(4),
         category: "medication",
         amount: 28000,
+        payment_method: "cash",
         description: `${SAMPLE_MARKER} Heat stress supplements`,
       },
       {
@@ -383,6 +386,7 @@ async function seedPoultrySampleData() {
         expense_date: daysAgo(2),
         category: "utilities",
         amount: 45000,
+        payment_method: "bank",
         description: `${SAMPLE_MARKER} Poultry section water and power allocation`,
       },
     ],
@@ -711,6 +715,7 @@ async function seedGoatSampleData() {
         expense_date: daysAgo(20),
         category: "vaccination",
         amount: 9500,
+        payment_method: "cash",
         description: `${SAMPLE_MARKER} PPR vaccination cost allocation`,
       },
       {
@@ -719,6 +724,7 @@ async function seedGoatSampleData() {
         expense_date: daysAgo(3),
         category: "feed",
         amount: 34000,
+        payment_method: "bank",
         description: `${SAMPLE_MARKER} Breeding pen hay and legume ration`,
       },
       {
@@ -727,6 +733,7 @@ async function seedGoatSampleData() {
         expense_date: daysAgo(6),
         category: "medication",
         amount: 7800,
+        payment_method: "cash",
         description: `${SAMPLE_MARKER} Digestive treatment`,
       },
       {
@@ -735,6 +742,7 @@ async function seedGoatSampleData() {
         expense_date: daysAgo(2),
         category: "feed",
         amount: 17600,
+        payment_method: "bank",
         description: `${SAMPLE_MARKER} Kids pen starter mash`,
       },
     ],

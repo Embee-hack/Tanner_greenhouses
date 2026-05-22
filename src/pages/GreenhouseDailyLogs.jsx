@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, CalendarDays, Droplets, Plus, Sprout, Bug, FlaskConical } from "lucide-react";
+import { Activity, CalendarDays, Droplets, Plus, Sprout, Bug, FlaskConical, Leaf } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
@@ -31,6 +31,11 @@ const createDefaultForm = () => ({
   fertigation_intervals: "",
   fertigation_minutes_per_interval: "",
   fertigation_times: "",
+  // Fertilizer
+  fertilizer_name: "",
+  fertilizer_quantity: "",
+  fertilizer_unit: "kg",
+  fertilizer_method: "",
   // Pesticide
   pesticide_name: "",
   pesticide_rate_ml: "",
@@ -73,6 +78,14 @@ const getFertigationSummary = (record) => {
     return times ? `${base} (${times})` : base;
   }
   return "—";
+};
+
+const getFertilizerSummary = (record) => {
+  const name = String(record?.fertilizer_name || "").trim();
+  if (!name) return "—";
+  const quantity = record?.fertilizer_quantity ? `${record.fertilizer_quantity} ${record.fertilizer_unit || "kg"}` : "";
+  const method = String(record?.fertilizer_method || "").trim();
+  return [name, quantity, method].filter(Boolean).join(" · ");
 };
 
 const getPesticideSummary = (record) => {
@@ -174,6 +187,10 @@ export default function GreenhouseDailyLogs() {
       fertigation_intervals: record.fertigation_intervals != null ? String(record.fertigation_intervals) : "",
       fertigation_minutes_per_interval: record.fertigation_minutes_per_interval != null ? String(record.fertigation_minutes_per_interval) : "",
       fertigation_times: record.fertigation_times || "",
+      fertilizer_name: record.fertilizer_name || "",
+      fertilizer_quantity: record.fertilizer_quantity != null ? String(record.fertilizer_quantity) : "",
+      fertilizer_unit: record.fertilizer_unit || "kg",
+      fertilizer_method: record.fertilizer_method || "",
       pesticide_name: record.pesticide_name || "",
       pesticide_rate_ml: record.pesticide_rate_ml != null ? String(record.pesticide_rate_ml) : "",
       pesticide_knapsacks: record.pesticide_knapsacks != null ? String(record.pesticide_knapsacks) : "",
@@ -208,6 +225,7 @@ export default function GreenhouseDailyLogs() {
     const irrigationMins = toNonNegativeInteger(form.irrigation_minutes_per_interval);
     const fertigationIntervals = toNonNegativeInteger(form.fertigation_intervals);
     const fertigationMins = toNonNegativeInteger(form.fertigation_minutes_per_interval);
+    const fertilizerQuantity = toNonNegativeNumber(form.fertilizer_quantity);
     const pesticideRateMl = toNonNegativeNumber(form.pesticide_rate_ml);
     const pesticideKnapsacks = toNonNegativeNumber(form.pesticide_knapsacks);
     const fungicideRateMl = toNonNegativeNumber(form.fungicide_rate_ml);
@@ -216,14 +234,20 @@ export default function GreenhouseDailyLogs() {
     if ([irrigationIntervals, irrigationMins, fertigationIntervals, fertigationMins].some(isNaN)) {
       return { error: "Intervals and minutes must be whole numbers of zero or more." };
     }
-    if ([pesticideRateMl, pesticideKnapsacks, fungicideRateMl, fungicideKnapsacks].some(isNaN)) {
-      return { error: "Rates and knapsack counts must be positive numbers." };
+    if ([fertilizerQuantity, pesticideRateMl, pesticideKnapsacks, fungicideRateMl, fungicideKnapsacks].some(isNaN)) {
+      return { error: "Product quantities, rates, and knapsack counts must be positive numbers." };
     }
     if ((irrigationIntervals || 0) > 0 && !(irrigationMins > 0)) {
       return { error: "Enter minutes per irrigation interval." };
     }
     if ((fertigationIntervals || 0) > 0 && !(fertigationMins > 0)) {
       return { error: "Enter minutes per fertigation interval." };
+    }
+    if (form.fertilizer_name.trim() && !(fertilizerQuantity > 0)) {
+      return { error: "Enter the fertilizer quantity used." };
+    }
+    if ((fertilizerQuantity || 0) > 0 && !form.fertilizer_name.trim()) {
+      return { error: "Enter the fertilizer name." };
     }
     if (form.pesticide_name.trim() && !pesticideRateMl) {
       return { error: "Enter the pesticide application rate (ml)." };
@@ -243,6 +267,10 @@ export default function GreenhouseDailyLogs() {
         fertigation_intervals: fertigationIntervals,
         fertigation_minutes_per_interval: fertigationMins,
         fertigation_times: form.fertigation_times.trim() || null,
+        fertilizer_name: form.fertilizer_name.trim() || null,
+        fertilizer_quantity: fertilizerQuantity,
+        fertilizer_unit: form.fertilizer_name.trim() || fertilizerQuantity ? form.fertilizer_unit || "kg" : null,
+        fertilizer_method: form.fertilizer_method.trim() || null,
         pesticide_name: form.pesticide_name.trim() || null,
         pesticide_rate_ml: pesticideRateMl,
         pesticide_knapsacks: pesticideKnapsacks,
@@ -308,6 +336,11 @@ export default function GreenhouseDailyLogs() {
       render: (_, row) => getFertigationSummary(row),
     },
     {
+      key: "fertilizer",
+      label: "Fertilizer",
+      render: (_, row) => <span className="max-w-[180px] block truncate">{getFertilizerSummary(row)}</span>,
+    },
+    {
       key: "pesticide",
       label: "Pesticide",
       render: (_, row) => <span className="max-w-[180px] block truncate">{getPesticideSummary(row)}</span>,
@@ -364,9 +397,10 @@ export default function GreenhouseDailyLogs() {
 
       <ErrorBanner message={loadError} onRetry={load} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard title="Total Logs" value={records.length.toLocaleString()} subtitle={`${filteredRecords.length.toLocaleString()} in current view`} icon={Activity} color="primary" loading={loading} />
         <StatCard title="Today's Logs" value={todayRecords.length.toLocaleString()} subtitle={`${housesLoggedToday} house${housesLoggedToday === 1 ? "" : "s"} covered`} icon={CalendarDays} color="success" loading={loading} />
+        <StatCard title="Fertilizer Applied Today" value={todayRecords.filter((r) => r.fertilizer_name).length} subtitle="Houses with fertilizer logged" icon={Leaf} color="success" loading={loading} />
         <StatCard title="Pesticide Applied Today" value={todayRecords.filter((r) => r.pesticide_name).length} subtitle="Houses with pesticide logged" icon={Bug} color="warning" loading={loading} />
         <StatCard title="Fungicide Applied Today" value={todayRecords.filter((r) => r.fungicide_name).length} subtitle="Houses with fungicide logged" icon={FlaskConical} color="accent" loading={loading} />
       </div>
@@ -397,7 +431,7 @@ export default function GreenhouseDailyLogs() {
         <EmptyState
           icon={CalendarDays}
           title="No greenhouse daily logs found"
-          description="Record irrigation, fertigation, pesticide/fungicide applications and other daily operations."
+          description="Record irrigation, fertigation, fertilizer, pesticide/fungicide applications and other daily operations."
           action={<Button onClick={openCreateModal}>Add Daily Log</Button>}
         />
       ) : (
@@ -461,6 +495,36 @@ export default function GreenhouseDailyLogs() {
             </div>
           </div>
 
+          {/* Fertilizer */}
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-2"><Leaf className="w-4 h-4 text-lime-500" />Fertilizer Application</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <FormField label="Fertilizer Name">
+                <Input placeholder="e.g. NPK 15-15-15" value={form.fertilizer_name} onChange={set("fertilizer_name")} />
+              </FormField>
+              <FormField label="Quantity Used">
+                <Input type="number" min="0" step="0.1" placeholder="0" value={form.fertilizer_quantity} onChange={set("fertilizer_quantity")} />
+              </FormField>
+              <FormField label="Unit">
+                <Select value={form.fertilizer_unit || "kg"} onValueChange={(value) => setForm((prev) => ({ ...prev, fertilizer_unit: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">kg</SelectItem>
+                    <SelectItem value="g">g</SelectItem>
+                    <SelectItem value="L">L</SelectItem>
+                    <SelectItem value="ml">ml</SelectItem>
+                    <SelectItem value="bags">bags</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Application Method">
+                <Input placeholder="Broadcast, drip, foliar..." value={form.fertilizer_method} onChange={set("fertilizer_method")} />
+              </FormField>
+            </div>
+          </div>
+
           {/* Pesticide */}
           <div className="rounded-xl border border-border p-4 space-y-3">
             <div>
@@ -502,7 +566,7 @@ export default function GreenhouseDailyLogs() {
             <Textarea
               value={form.additional_notes}
               onChange={set("additional_notes")}
-              placeholder="e.g. Pruning carried out, weeding of house, nutrients applied (name + kg used), any other observations or activities."
+              placeholder="e.g. Pruning carried out, weeding of house, crop observations, maintenance notes, or other activities."
               rows={4}
             />
           </FormField>

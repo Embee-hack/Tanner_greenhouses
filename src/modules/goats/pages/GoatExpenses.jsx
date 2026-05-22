@@ -14,8 +14,17 @@ const initialValues = {
   expense_date: "",
   category: "",
   amount: "",
+  payment_method: "cash",
   description: "",
 };
+
+const paymentMethodOptions = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+];
+
+const formatPaymentMethod = (value) =>
+  paymentMethodOptions.find((method) => method.value === value)?.label || "Cash";
 
 export default function GoatExpenses() {
   const { fmt } = useCurrency();
@@ -85,6 +94,7 @@ export default function GoatExpenses() {
         { key: "goat", label: "Goat", render: (_value, row) => row.goat?.tag_number || "—" },
         { key: "pen", label: "Pen", render: (_value, row) => row.pen?.name || "—" },
         { key: "amount", label: "Amount", render: (value) => fmt(value) },
+        { key: "payment_method", label: "Payment", render: (value) => formatPaymentMethod(value) },
       ]}
       records={records}
       loading={loading}
@@ -103,6 +113,7 @@ export default function GoatExpenses() {
         { key: "expense_date", label: "Expense date", type: "date", required: true },
         { key: "category", label: "Category", required: true, placeholder: "Veterinary" },
         { key: "amount", label: "Amount", type: "number", required: true, min: 0, step: "0.01" },
+        { key: "payment_method", label: "Payment method", type: "select", required: true, options: paymentMethodOptions },
         { key: "description", label: "Description", type: "textarea", fullWidth: true, placeholder: "Expense details" },
       ]}
       mapToForm={(row) => ({
@@ -110,11 +121,13 @@ export default function GoatExpenses() {
         goat_id: row.goat_id || "__none__",
         pen_id: row.pen_id || "__none__",
         expense_date: row.expense_date || "",
+        payment_method: row.payment_method || "cash",
       })}
       buildPayload={(form) => ({
         ...form,
         goat_id: normalizeOptionalValue(form.goat_id),
         pen_id: normalizeOptionalValue(form.pen_id),
+        payment_method: form.payment_method || "cash",
       })}
       onCreate={async (payload) => {
         await goatsClient.expenses.create(payload);

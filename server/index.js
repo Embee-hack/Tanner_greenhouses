@@ -1784,6 +1784,12 @@ app.get("/api/events", async (req, res) => {
 
 app.use((err, req, res, _next) => {
   console.error(`Request failed: ${req.method} ${req.originalUrl}`, err);
+  if (err?.code === "P1001") {
+    return res.status(503).json({
+      error: "Database connection unavailable. Check that the configured database server is reachable, then try again.",
+      code: "P1001",
+    });
+  }
   res.status(500).json({ error: "Internal server error" });
 });
 

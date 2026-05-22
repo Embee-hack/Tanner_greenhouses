@@ -150,15 +150,16 @@ model PoultrySale {
 }
 
 model PoultryExpense {
-  id           String        @id @default(uuid())
-  flock_id     String?
-  expense_date DateTime
-  category     String
-  amount       Float
-  description  String?
-  created_at   DateTime      @default(now())
-  updated_at   DateTime      @updatedAt
-  flock        PoultryFlock? @relation(fields: [flock_id], references: [id])
+  id             String        @id @default(uuid())
+  flock_id       String?
+  expense_date   DateTime
+  category       String
+  amount         Float
+  payment_method String        @default("cash")
+  description    String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+  flock          PoultryFlock? @relation(fields: [flock_id], references: [id])
 
   @@index([flock_id])
   @@index([expense_date])
@@ -307,17 +308,18 @@ model GoatSale {
 }
 
 model GoatExpense {
-  id           String   @id @default(uuid())
-  goat_id      String?
-  pen_id       String?
-  expense_date DateTime
-  category     String
-  amount       Float
-  description  String?
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-  goat         Goat?    @relation(fields: [goat_id], references: [id])
-  pen          GoatPen? @relation(fields: [pen_id], references: [id])
+  id             String   @id @default(uuid())
+  goat_id        String?
+  pen_id         String?
+  expense_date   DateTime
+  category       String
+  amount         Float
+  payment_method String   @default("cash")
+  description    String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  goat           Goat?    @relation(fields: [goat_id], references: [id])
+  pen            GoatPen? @relation(fields: [pen_id], references: [id])
 
   @@index([goat_id])
   @@index([pen_id])

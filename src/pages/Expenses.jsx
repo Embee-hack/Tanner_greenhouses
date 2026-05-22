@@ -38,9 +38,13 @@ import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
 const CATEGORIES = ["labor","fertilizer","pesticide","water","energy","packaging","transport","equipment","seeds","other"];
+const PAYMENT_METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bank", label: "Bank" },
+];
 const COLORS = ["hsl(152,60%,32%)","hsl(38,95%,52%)","hsl(199,89%,48%)","hsl(280,65%,60%)","hsl(0,72%,51%)","hsl(340,75%,55%)","hsl(45,90%,50%)","hsl(170,60%,40%)","hsl(230,70%,60%)","hsl(90,55%,45%)"];
 
-const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "labor", amount: "", greenhouse_id: "", description: "" };
+const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "labor", amount: "", payment_method: "cash", greenhouse_id: "", description: "" };
 const SHARED_GREENHOUSE_VALUE = "__shared__";
 
 const formatExpenseDate = (dateStr) => {
@@ -60,6 +64,9 @@ const CATEGORY_COLORS = {
   seeds: "bg-success/14 text-success border-success/30",
   other: "bg-muted text-muted-foreground border-border",
 };
+
+const getPaymentMethodLabel = (value) =>
+  PAYMENT_METHODS.find((method) => method.value === value)?.label || "Cash";
 
 const getExpenseSelectionState = (rows, selectedIds) => {
   const ids = rows.map((row) => row.id).filter(Boolean);
@@ -119,6 +126,7 @@ export default function Expenses() {
     setForm({
       ...defaultForm,
       ...row,
+      payment_method: row.payment_method || "cash",
       greenhouse_id: row.greenhouse_id || "",
       amount: row.amount != null ? String(row.amount) : "",
       description: row.description || "",
@@ -142,6 +150,7 @@ export default function Expenses() {
     setForm({
       ...defaultForm,
       ...row,
+      payment_method: row.payment_method || "cash",
       greenhouse_id: row.greenhouse_id || "",
       amount: row.amount != null ? String(row.amount) : "",
       description: row.description || "",
@@ -157,6 +166,7 @@ export default function Expenses() {
       const payload = {
         ...form,
         amount: parseFloat(form.amount) || 0,
+        payment_method: form.payment_method || "cash",
         greenhouse_id: form.greenhouse_id || null,
         allocation_method: "direct",
       };
@@ -182,6 +192,7 @@ export default function Expenses() {
         date: row.date,
         category: row.category,
         amount: row.amount,
+        payment_method: row.payment_method || "cash",
         greenhouse_id: row.greenhouse_id || null,
         description: row.description || "",
         allocation_method: "direct",
@@ -404,6 +415,7 @@ export default function Expenses() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Category</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">House</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Payment</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Description</th>
                         <th className="px-4 py-3 w-12" />
                       </tr>
@@ -434,6 +446,11 @@ export default function Expenses() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className="font-bold text-foreground">{fmt(row.amount, 2)}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md font-medium">
+                                {getPaymentMethodLabel(row.payment_method)}
+                              </span>
                             </td>
                             <td className="px-4 py-3">
                               <div className="min-w-0 max-w-[320px] whitespace-normal">
@@ -510,7 +527,7 @@ export default function Expenses() {
       <Modal open={showModal} onClose={() => { setShowModal(false); setEditItem(null); }} title={editItem ? "Edit Expense" : "Add Expense"}>
         <div className="space-y-4">
           {error && <div className="bg-danger/10 text-danger text-sm rounded-lg px-4 py-2">{error}</div>}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Date" required>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </FormField>
@@ -518,11 +535,19 @@ export default function Expenses() {
               <Input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" step="0.01" />
             </FormField>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Category" required>
               <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g," ")}</SelectItem>)}</SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Payment method" required>
+              <Select value={form.payment_method || "cash"} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(method => <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>)}
+                </SelectContent>
               </Select>
             </FormField>
             <FormField label="Greenhouse (optional)">

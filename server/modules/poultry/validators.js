@@ -88,6 +88,7 @@ const expenseSchema = z.object({
   expense_date: requiredDate("Expense date"),
   category: requiredText("Category", 120),
   amount: requiredFloat("Amount", 0),
+  payment_method: enumText(["cash", "bank"], "Payment method").default("cash"),
   description: optionalText(500),
 });
 
