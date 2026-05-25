@@ -14,12 +14,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, CalendarDays, Droplets, Plus, Sprout, Bug, FlaskConical, Leaf } from "lucide-react";
+import { Activity, CalendarDays, Droplets, Plus, Sprout, FlaskConical, Leaf, Trash2 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors.js";
 import { createPageUrl } from "@/utils";
 
 const ALL_HOUSES_VALUE = "__all__";
 const getToday = () => new Date().toISOString().slice(0, 10);
+
+const createSprayProduct = () => ({
+  product_name: "",
+  category: "pesticide",
+  dosage: "",
+  unit: "ml",
+  notes: "",
+});
 
 const createDefaultForm = () => ({
   greenhouse_id: "",
@@ -36,14 +44,14 @@ const createDefaultForm = () => ({
   fertilizer_quantity: "",
   fertilizer_unit: "kg",
   fertilizer_method: "",
-  // Pesticide
-  pesticide_name: "",
-  pesticide_rate_ml: "",
-  pesticide_knapsacks: "",
-  // Fungicide
-  fungicide_name: "",
-  fungicide_rate_ml: "",
-  fungicide_knapsacks: "",
+  // Spraying activity
+  spray_crop: "",
+  spray_purpose: "",
+  spray_method: "",
+  spray_water_volume: "",
+  spray_water_unit: "L",
+  spray_notes: "",
+  spray_products: [createSprayProduct()],
   // Notes
   additional_notes: "",
 });
@@ -88,20 +96,54 @@ const getFertilizerSummary = (record) => {
   return [name, quantity, method].filter(Boolean).join(" · ");
 };
 
-const getPesticideSummary = (record) => {
-  const name = String(record?.pesticide_name || "").trim();
-  if (!name) return "—";
-  const rate = record?.pesticide_rate_ml ? `${record.pesticide_rate_ml} ml` : "";
-  const knapsacks = record?.pesticide_knapsacks ? `${record.pesticide_knapsacks} knapsack${record.pesticide_knapsacks > 1 ? "s" : ""}` : "";
-  return [name, rate, knapsacks].filter(Boolean).join(" · ");
+const normalizeSprayProducts = (products) => {
+  if (!Array.isArray(products)) return [];
+  return products
+    .map((product) => ({
+      product_name: String(product?.product_name || product?.name || "").trim(),
+      category: String(product?.category || "pesticide").trim().toLowerCase(),
+      dosage: product?.dosage != null && product?.dosage !== "" ? String(product.dosage) : "",
+      unit: String(product?.unit || "ml").trim(),
+      notes: String(product?.notes || "").trim(),
+    }))
+    .filter((product) => product.product_name || product.dosage || product.notes);
 };
 
-const getFungicideSummary = (record) => {
-  const name = String(record?.fungicide_name || "").trim();
-  if (!name) return "—";
-  const rate = record?.fungicide_rate_ml ? `${record.fungicide_rate_ml} ml` : "";
-  const knapsacks = record?.fungicide_knapsacks ? `${record.fungicide_knapsacks} knapsack${record.fungicide_knapsacks > 1 ? "s" : ""}` : "";
-  return [name, rate, knapsacks].filter(Boolean).join(" · ");
+const getLegacySprayProducts = (record) => {
+  const products = [];
+  if (record?.pesticide_name) {
+    products.push({
+      product_name: record.pesticide_name,
+      category: "pesticide",
+      dosage: record.pesticide_rate_ml != null ? String(record.pesticide_rate_ml) : "",
+      unit: "ml",
+      notes: record.pesticide_knapsacks ? `${record.pesticide_knapsacks} knapsack${record.pesticide_knapsacks > 1 ? "s" : ""}` : "",
+    });
+  }
+  if (record?.fungicide_name) {
+    products.push({
+      product_name: record.fungicide_name,
+      category: "fungicide",
+      dosage: record.fungicide_rate_ml != null ? String(record.fungicide_rate_ml) : "",
+      unit: "ml",
+      notes: record.fungicide_knapsacks ? `${record.fungicide_knapsacks} knapsack${record.fungicide_knapsacks > 1 ? "s" : ""}` : "",
+    });
+  }
+  return products;
+};
+
+const getSprayProducts = (record) => {
+  const products = normalizeSprayProducts(record?.spray_products);
+  return products.length > 0 ? products : getLegacySprayProducts(record);
+};
+
+const getSpraySummary = (record) => {
+  const products = getSprayProducts(record);
+  if (products.length === 0) return "—";
+  const names = products.map((product) => product.product_name).filter(Boolean);
+  const water = record?.spray_water_volume ? `${record.spray_water_volume} ${record.spray_water_unit || "L"} water` : "";
+  const prefix = names.length > 0 ? `${names.length} product${names.length === 1 ? "" : "s"}: ${names.join(", ")}` : `${products.length} product${products.length === 1 ? "" : "s"}`;
+  return [prefix, water].filter(Boolean).join(" · ");
 };
 
 const truncate = (value, max = 80) => {
@@ -191,12 +233,16 @@ export default function GreenhouseDailyLogs() {
       fertilizer_quantity: record.fertilizer_quantity != null ? String(record.fertilizer_quantity) : "",
       fertilizer_unit: record.fertilizer_unit || "kg",
       fertilizer_method: record.fertilizer_method || "",
-      pesticide_name: record.pesticide_name || "",
-      pesticide_rate_ml: record.pesticide_rate_ml != null ? String(record.pesticide_rate_ml) : "",
-      pesticide_knapsacks: record.pesticide_knapsacks != null ? String(record.pesticide_knapsacks) : "",
-      fungicide_name: record.fungicide_name || "",
-      fungicide_rate_ml: record.fungicide_rate_ml != null ? String(record.fungicide_rate_ml) : "",
-      fungicide_knapsacks: record.fungicide_knapsacks != null ? String(record.fungicide_knapsacks) : "",
+      spray_crop: record.spray_crop || "",
+      spray_purpose: record.spray_purpose || "",
+      spray_method: record.spray_method || "",
+      spray_water_volume: record.spray_water_volume != null ? String(record.spray_water_volume) : "",
+      spray_water_unit: record.spray_water_unit || "L",
+      spray_notes: record.spray_notes || "",
+      spray_products: (() => {
+        const products = getSprayProducts(record);
+        return products.length > 0 ? products : [createSprayProduct()];
+      })(),
       additional_notes: record.additional_notes || "",
     });
     setError("");
@@ -226,16 +272,23 @@ export default function GreenhouseDailyLogs() {
     const fertigationIntervals = toNonNegativeInteger(form.fertigation_intervals);
     const fertigationMins = toNonNegativeInteger(form.fertigation_minutes_per_interval);
     const fertilizerQuantity = toNonNegativeNumber(form.fertilizer_quantity);
-    const pesticideRateMl = toNonNegativeNumber(form.pesticide_rate_ml);
-    const pesticideKnapsacks = toNonNegativeNumber(form.pesticide_knapsacks);
-    const fungicideRateMl = toNonNegativeNumber(form.fungicide_rate_ml);
-    const fungicideKnapsacks = toNonNegativeNumber(form.fungicide_knapsacks);
+    const sprayWaterVolume = toNonNegativeNumber(form.spray_water_volume);
+    const sprayProducts = (form.spray_products || []).map((product) => ({
+      product_name: String(product.product_name || "").trim(),
+      category: String(product.category || "pesticide").trim().toLowerCase(),
+      dosage: toNonNegativeNumber(product.dosage),
+      unit: String(product.unit || "ml").trim(),
+      notes: String(product.notes || "").trim(),
+    }));
+    const completedSprayProducts = sprayProducts.filter(
+      (product) => product.product_name || product.dosage != null || product.notes
+    );
 
     if ([irrigationIntervals, irrigationMins, fertigationIntervals, fertigationMins].some(isNaN)) {
       return { error: "Intervals and minutes must be whole numbers of zero or more." };
     }
-    if ([fertilizerQuantity, pesticideRateMl, pesticideKnapsacks, fungicideRateMl, fungicideKnapsacks].some(isNaN)) {
-      return { error: "Product quantities, rates, and knapsack counts must be positive numbers." };
+    if ([fertilizerQuantity, sprayWaterVolume].some(isNaN) || completedSprayProducts.some((product) => isNaN(product.dosage))) {
+      return { error: "Product quantities, spray water volume, and dosages must be positive numbers." };
     }
     if ((irrigationIntervals || 0) > 0 && !(irrigationMins > 0)) {
       return { error: "Enter minutes per irrigation interval." };
@@ -249,12 +302,15 @@ export default function GreenhouseDailyLogs() {
     if ((fertilizerQuantity || 0) > 0 && !form.fertilizer_name.trim()) {
       return { error: "Enter the fertilizer name." };
     }
-    if (form.pesticide_name.trim() && !pesticideRateMl) {
-      return { error: "Enter the pesticide application rate (ml)." };
+    if (completedSprayProducts.some((product) => !product.product_name)) {
+      return { error: "Enter a product name for each spraying product row." };
     }
-    if (form.fungicide_name.trim() && !fungicideRateMl) {
-      return { error: "Enter the fungicide application rate (ml)." };
+    if (completedSprayProducts.some((product) => !(product.dosage > 0))) {
+      return { error: "Enter the measurement/dosage for each spraying product." };
     }
+
+    const firstPesticide = completedSprayProducts.find((product) => product.category === "pesticide");
+    const firstFungicide = completedSprayProducts.find((product) => product.category === "fungicide");
 
     return {
       payload: {
@@ -271,12 +327,19 @@ export default function GreenhouseDailyLogs() {
         fertilizer_quantity: fertilizerQuantity,
         fertilizer_unit: form.fertilizer_name.trim() || fertilizerQuantity ? form.fertilizer_unit || "kg" : null,
         fertilizer_method: form.fertilizer_method.trim() || null,
-        pesticide_name: form.pesticide_name.trim() || null,
-        pesticide_rate_ml: pesticideRateMl,
-        pesticide_knapsacks: pesticideKnapsacks,
-        fungicide_name: form.fungicide_name.trim() || null,
-        fungicide_rate_ml: fungicideRateMl,
-        fungicide_knapsacks: fungicideKnapsacks,
+        spray_crop: form.spray_crop.trim() || null,
+        spray_purpose: form.spray_purpose.trim() || null,
+        spray_method: form.spray_method.trim() || null,
+        spray_water_volume: sprayWaterVolume,
+        spray_water_unit: form.spray_water_volume ? form.spray_water_unit || "L" : null,
+        spray_notes: form.spray_notes.trim() || null,
+        spray_products: completedSprayProducts,
+        pesticide_name: firstPesticide?.product_name || null,
+        pesticide_rate_ml: firstPesticide?.unit === "ml" ? firstPesticide.dosage : null,
+        pesticide_knapsacks: null,
+        fungicide_name: firstFungicide?.product_name || null,
+        fungicide_rate_ml: firstFungicide?.unit === "ml" ? firstFungicide.dosage : null,
+        fungicide_knapsacks: null,
         additional_notes: form.additional_notes.trim() || null,
       },
     };
@@ -318,6 +381,32 @@ export default function GreenhouseDailyLogs() {
 
   const set = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const updateSprayProduct = (index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      spray_products: prev.spray_products.map((product, productIndex) =>
+        productIndex === index ? { ...product, [field]: value } : product
+      ),
+    }));
+  };
+
+  const addSprayProduct = () => {
+    setForm((prev) => ({
+      ...prev,
+      spray_products: [...prev.spray_products, createSprayProduct()],
+    }));
+  };
+
+  const removeSprayProduct = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      spray_products:
+        prev.spray_products.length === 1
+          ? [createSprayProduct()]
+          : prev.spray_products.filter((_, productIndex) => productIndex !== index),
+    }));
+  };
+
   const columns = [
     { key: "log_date", label: "Date", noWrap: true },
     {
@@ -341,14 +430,9 @@ export default function GreenhouseDailyLogs() {
       render: (_, row) => <span className="max-w-[180px] block truncate">{getFertilizerSummary(row)}</span>,
     },
     {
-      key: "pesticide",
-      label: "Pesticide",
-      render: (_, row) => <span className="max-w-[180px] block truncate">{getPesticideSummary(row)}</span>,
-    },
-    {
-      key: "fungicide",
-      label: "Fungicide",
-      render: (_, row) => <span className="max-w-[180px] block truncate">{getFungicideSummary(row)}</span>,
+      key: "spraying",
+      label: "Spraying",
+      render: (_, row) => <span className="max-w-[260px] block truncate">{getSpraySummary(row)}</span>,
     },
     {
       key: "additional_notes",
@@ -401,8 +485,8 @@ export default function GreenhouseDailyLogs() {
         <StatCard title="Total Logs" value={records.length.toLocaleString()} subtitle={`${filteredRecords.length.toLocaleString()} in current view`} icon={Activity} color="primary" loading={loading} />
         <StatCard title="Today's Logs" value={todayRecords.length.toLocaleString()} subtitle={`${housesLoggedToday} house${housesLoggedToday === 1 ? "" : "s"} covered`} icon={CalendarDays} color="success" loading={loading} />
         <StatCard title="Fertilizer Applied Today" value={todayRecords.filter((r) => r.fertilizer_name).length} subtitle="Houses with fertilizer logged" icon={Leaf} color="success" loading={loading} />
-        <StatCard title="Pesticide Applied Today" value={todayRecords.filter((r) => r.pesticide_name).length} subtitle="Houses with pesticide logged" icon={Bug} color="warning" loading={loading} />
-        <StatCard title="Fungicide Applied Today" value={todayRecords.filter((r) => r.fungicide_name).length} subtitle="Houses with fungicide logged" icon={FlaskConical} color="accent" loading={loading} />
+        <StatCard title="Sprays Logged Today" value={todayRecords.filter((r) => getSprayProducts(r).length > 0).length} subtitle="Combined spray activities" icon={FlaskConical} color="warning" loading={loading} />
+        <StatCard title="Spray Products Today" value={todayRecords.reduce((sum, row) => sum + getSprayProducts(row).length, 0)} subtitle="Products mixed across sprays" icon={Sprout} color="accent" loading={loading} />
       </div>
 
       <div className="bg-card rounded-xl border border-border p-4">
@@ -431,7 +515,7 @@ export default function GreenhouseDailyLogs() {
         <EmptyState
           icon={CalendarDays}
           title="No greenhouse daily logs found"
-          description="Record irrigation, fertigation, fertilizer, pesticide/fungicide applications and other daily operations."
+          description="Record irrigation, fertigation, fertilizer, combined spray mixtures, and other daily operations."
           action={<Button onClick={openCreateModal}>Add Daily Log</Button>}
         />
       ) : (
@@ -525,40 +609,106 @@ export default function GreenhouseDailyLogs() {
             </div>
           </div>
 
-          {/* Pesticide */}
+          {/* Spraying Activity */}
           <div className="rounded-xl border border-border p-4 space-y-3">
-            <div>
-              <h4 className="text-sm font-semibold flex items-center gap-2"><Bug className="w-4 h-4 text-amber-600" />Pesticide Application</h4>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2"><FlaskConical className="w-4 h-4 text-amber-500" />Spraying Activity</h4>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <FormField label="Pesticide Name">
-                <Input placeholder="Product name" value={form.pesticide_name} onChange={set("pesticide_name")} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FormField label="Crop">
+                <Input placeholder="e.g. Cucumber, Tomato" value={form.spray_crop} onChange={set("spray_crop")} />
               </FormField>
-              <FormField label="Rate (ml)">
-                <Input type="number" min="0" step="0.1" placeholder="0" value={form.pesticide_rate_ml} onChange={set("pesticide_rate_ml")} />
+              <FormField label="Purpose of Spraying">
+                <Input placeholder="e.g. Pest control, disease prevention" value={form.spray_purpose} onChange={set("spray_purpose")} />
               </FormField>
-              <FormField label="No. of Knapsacks">
-                <Input type="number" min="0" step="0.5" placeholder="0" value={form.pesticide_knapsacks} onChange={set("pesticide_knapsacks")} />
+              <FormField label="Spray Method / Type">
+                <Input placeholder="Knapsack, boom sprayer, foliar..." value={form.spray_method} onChange={set("spray_method")} />
               </FormField>
+              <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+                <FormField label="Total Water Volume">
+                  <Input type="number" min="0" step="0.1" placeholder="0" value={form.spray_water_volume} onChange={set("spray_water_volume")} />
+                </FormField>
+                <FormField label="Unit">
+                  <Select value={form.spray_water_unit || "L"} onValueChange={(value) => setForm((prev) => ({ ...prev, spray_water_unit: value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="L">L</SelectItem>
+                      <SelectItem value="ml">ml</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+              </div>
             </div>
-          </div>
 
-          {/* Fungicide */}
-          <div className="rounded-xl border border-border p-4 space-y-3">
-            <div>
-              <h4 className="text-sm font-semibold flex items-center gap-2"><FlaskConical className="w-4 h-4 text-violet-600" />Fungicide Application</h4>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h5 className="text-sm font-semibold text-foreground">Products Used</h5>
+                <Button type="button" variant="outline" size="sm" onClick={addSprayProduct} className="gap-1.5">
+                  <Plus className="w-4 h-4" />
+                  Add another product
+                </Button>
+              </div>
+              {form.spray_products.map((product, index) => (
+                <div key={index} className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Product {index + 1}</div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeSprayProduct(index)} className="h-8 gap-1 text-muted-foreground hover:text-danger">
+                      <Trash2 className="w-4 h-4" />
+                      Remove
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <FormField label="Product Name">
+                      <Input placeholder="Product name" value={product.product_name} onChange={(event) => updateSprayProduct(index, "product_name", event.target.value)} />
+                    </FormField>
+                    <FormField label="Product Category">
+                      <Select value={product.category || "pesticide"} onValueChange={(value) => updateSprayProduct(index, "category", value)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pesticide">Pesticide</SelectItem>
+                          <SelectItem value="fungicide">Fungicide</SelectItem>
+                          <SelectItem value="insecticide">Insecticide</SelectItem>
+                          <SelectItem value="herbicide">Herbicide</SelectItem>
+                          <SelectItem value="acaricide">Acaricide</SelectItem>
+                          <SelectItem value="nutrient">Nutrient</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Measurement / Dosage">
+                      <Input type="number" min="0" step="0.01" placeholder="0" value={product.dosage} onChange={(event) => updateSprayProduct(index, "dosage", event.target.value)} />
+                    </FormField>
+                    <FormField label="Unit">
+                      <Select value={product.unit || "ml"} onValueChange={(value) => updateSprayProduct(index, "unit", value)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ml">ml</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="sachets">sachets</SelectItem>
+                          <SelectItem value="tablets">tablets</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Product Notes" className="sm:col-span-2">
+                      <Input placeholder="Optional product-specific notes" value={product.notes} onChange={(event) => updateSprayProduct(index, "notes", event.target.value)} />
+                    </FormField>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <FormField label="Fungicide Name">
-                <Input placeholder="Product name" value={form.fungicide_name} onChange={set("fungicide_name")} />
-              </FormField>
-              <FormField label="Rate (ml)">
-                <Input type="number" min="0" step="0.1" placeholder="0" value={form.fungicide_rate_ml} onChange={set("fungicide_rate_ml")} />
-              </FormField>
-              <FormField label="No. of Knapsacks">
-                <Input type="number" min="0" step="0.5" placeholder="0" value={form.fungicide_knapsacks} onChange={set("fungicide_knapsacks")} />
-              </FormField>
-            </div>
+
+            <FormField label="Spraying Notes">
+              <Textarea
+                value={form.spray_notes}
+                onChange={set("spray_notes")}
+                placeholder="Optional notes about the mixture, timing, weather, or application."
+                rows={3}
+              />
+            </FormField>
           </div>
 
           {/* Other Operations / Notes */}
