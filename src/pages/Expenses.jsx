@@ -48,8 +48,20 @@ const defaultForm = { date: new Date().toISOString().slice(0, 10), category: "la
 const SHARED_GREENHOUSE_VALUE = "__shared__";
 
 const formatExpenseDate = (dateStr) => {
+  if (!dateStr || dateStr === "__undated__") return "Undated";
   try { return format(parseISO(String(dateStr)), "d MMM yyyy"); }
   catch { return dateStr || "—"; }
+};
+
+const getExpenseMonthKey = (dateStr) => {
+  const value = String(dateStr || "");
+  return /^\d{4}-\d{2}/.test(value) ? value.slice(0, 7) : "__undated__";
+};
+
+const formatExpenseMonth = (monthKey) => {
+  if (!monthKey || monthKey === "__undated__") return "Undated";
+  try { return format(parseISO(`${monthKey}-01`), "MMMM yyyy"); }
+  catch { return monthKey; }
 };
 
 const CATEGORY_COLORS = {
@@ -282,6 +294,41 @@ export default function Expenses() {
     }));
   }, [sortedRecords]);
 
+  const monthlyGroups = useMemo(() => {
+    const groups = new Map();
+
+    groupedRecords.forEach((dateGroup) => {
+      const monthKey = getExpenseMonthKey(dateGroup.date);
+      if (!groups.has(monthKey)) {
+        groups.set(monthKey, {
+          month: monthKey,
+          dateGroups: [],
+          recordCount: 0,
+          totalAmount: 0,
+          categoryTotals: {},
+        });
+      }
+
+      const monthGroup = groups.get(monthKey);
+      monthGroup.dateGroups.push(dateGroup);
+      monthGroup.recordCount += dateGroup.rows.length;
+      monthGroup.totalAmount += dateGroup.totalAmount;
+
+      dateGroup.rows.forEach((row) => {
+        const category = row.category || "other";
+        monthGroup.categoryTotals[category] = (monthGroup.categoryTotals[category] || 0) + Number(row.amount || 0);
+      });
+    });
+
+    return Array.from(groups.values()).map((monthGroup) => ({
+      ...monthGroup,
+      topCategories: Object.entries(monthGroup.categoryTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name]) => name),
+    }));
+  }, [groupedRecords]);
+
   useEffect(() => {
     const visibleIds = sortedRecords.map((row) => row.id).filter(Boolean);
     setSelectedIds((prev) => prev.filter((id) => visibleIds.includes(id)));
@@ -361,6 +408,45 @@ export default function Expenses() {
             </div>
           </div>
         </div>
+      )}
+
+      {isAdmin && monthlyGroups.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Monthly Totals</h3>
+            <p className="text-xs text-muted-foreground mt-1">Expense totals grouped by month, with the daily totals listed below.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {monthlyGroups.map((monthGroup) => (
+              <div key={monthGroup.month} className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{formatExpenseMonth(monthGroup.month)}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {monthGroup.recordCount} expense record{monthGroup.recordCount === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-right">
+                    <div className="text-[11px] text-muted-foreground">Monthly Total</div>
+                    <div className="text-sm font-semibold text-foreground whitespace-nowrap">{fmt(monthGroup.totalAmount, 2)}</div>
+                  </div>
+                </div>
+                {monthGroup.topCategories.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {monthGroup.topCategories.map((category) => {
+                      const catClass = CATEGORY_COLORS[category] || CATEGORY_COLORS.other;
+                      return (
+                        <span key={category} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${catClass}`}>
+                          {category.replace(/_/g, " ")}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {!loading && records.length === 0 ? (
