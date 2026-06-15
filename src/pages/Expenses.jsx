@@ -410,7 +410,7 @@ export default function Expenses() {
         </div>
       )}
 
-      {isAdmin && monthlyGroups.length > 0 && (
+      {monthlyGroups.length > 0 && (
         <section className="space-y-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Monthly Totals</h3>
